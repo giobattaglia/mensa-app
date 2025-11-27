@@ -73,13 +73,21 @@ const getNextOpenDay = (fromDateStr) => {
   return ALLOWED_DATES_LIST.find(d => d > todayStr) || 'Data futura non trovata';
 };
 
-const LoadingSpinner = ({ text }) => (
+const LoadingSpinner = ({ text, onForceStart }) => (
   <div className="flex flex-col items-center justify-center p-4 min-h-[300px]">
     <svg className="animate-spin -ml-1 mr-3 h-10 w-10 text-green-600 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
     </svg>
-    <span className="text-gray-500 font-medium text-lg">{text || 'Caricamento sistema...'}</span>
+    <span className="text-gray-500 font-medium text-lg mb-4">{text || 'Caricamento sistema...'}</span>
+    {onForceStart && (
+      <button 
+        onClick={onForceStart}
+        className="text-xs text-blue-500 underline hover:text-blue-700"
+      >
+        Ci mette troppo? Clicca qui per avviare comunque.
+      </button>
+    )}
   </div>
 );
 
@@ -219,17 +227,19 @@ const WaterIcon = ({ type, selected, hasError }) => {
 };
 
 // --- SCHERMATA LOGIN ---
-const LoginScreen = ({ onLogin, demoMode, onToggleDemo, colleagues }) => {
+const LoginScreen = ({ onLogin, demoMode, onToggleDemo, colleagues = [] }) => {
   const [selectedColleague, setSelectedColleague] = useState('');
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
+
+  const safeColleagues = Array.isArray(colleagues) ? colleagues : [];
 
   const handleLogin = () => {
     if (!selectedColleague) {
       setError('Seleziona il tuo nome dalla lista.');
       return;
     }
-    const user = colleagues.find(c => c.id === selectedColleague);
+    const user = safeColleagues.find(c => c.id === selectedColleague);
     if (user && user.pin === pin) {
       onLogin(user);
     } else {
@@ -255,7 +265,7 @@ const LoginScreen = ({ onLogin, demoMode, onToggleDemo, colleagues }) => {
               className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none bg-white"
             >
               <option value="">-- Seleziona il tuo nome --</option>
-              {colleagues.map(c => (
+              {safeColleagues.map(c => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
@@ -605,6 +615,8 @@ const App = () => {
   const todayStr = formatDate(todayDate);
   const [blockedDates, setBlockedDates] = useState([]);
   const [isShopOpen, setIsShopOpen] = useState(true);
+  // Timeout di sicurezza
+  const [initTimeout, setInitTimeout] = useState(false);
 
   const [time, setTime] = useState(new Date());
   useEffect(() => {
@@ -640,6 +652,12 @@ const App = () => {
   // 1. INIT FIREBASE & SEEDING
   useEffect(() => {
     if (Object.keys(firebaseConfig).length === 0) return;
+    
+    // Timeout di sicurezza: se dopo 7 secondi non ha caricato, sblocca
+    const timeoutId = setTimeout(() => {
+      setInitTimeout(true);
+    }, 7000);
+
     try {
       const app = initializeApp(firebaseConfig);
       const authInstance = getAuth(app);
@@ -649,29 +667,43 @@ const App = () => {
 
       // Seeding iniziale (se non esistono utenti, carica quelli hardcoded)
       const checkAndSeed = async () => {
-         const usersRef = collection(dbInstance, USERS_COLLECTION_PATH);
-         const snap = await getDocs(usersRef);
-         if (snap.empty) {
-            console.log("Seeding database...");
-            const batch = writeBatch(dbInstance);
-            INITIAL_COLLEAGUES.forEach(u => {
-               const docRef = doc(usersRef, u.id);
-               batch.set(docRef, u);
-            });
-            // Seed settings
-            const settingsRef = doc(dbInstance, SETTINGS_DOC_PATH, 'main');
-            batch.set(settingsRef, INITIAL_SETTINGS);
-            
-            await batch.commit();
-            setColleaguesList(INITIAL_COLLEAGUES);
-            setAppSettings(INITIAL_SETTINGS);
-         } else {
-            const loadedUsers = snap.docs.map(d => d.data());
-            loadedUsers.sort((a,b) => a.name.localeCompare(b.name));
-            setColleaguesList(loadedUsers);
-            
-            const settingsSnap = await getDoc(doc(dbInstance, SETTINGS_DOC_PATH, 'main'));
-            if (settingsSnap.exists()) setAppSettings(settingsSnap.data());
+         try {
+           const usersRef = collection(dbInstance, USERS_COLLECTION_PATH);
+           const snap = await getDocs(usersRef);
+           
+           if (snap.empty) {
+              // Se è vuoto, usiamo i dati locali e proviamo a scrivere (se le regole lo permettono)
+              console.log("Database vuoto, uso dati locali...");
+              setColleaguesList(INITIAL_COLLEAGUES);
+              setAppSettings(INITIAL_SETTINGS);
+              
+              // Tentativo di scrittura (potrebbe fallire se le regole bloccano, ma l'app deve andare avanti)
+              try {
+                const batch = writeBatch(dbInstance);
+                INITIAL_COLLEAGUES.forEach(u => {
+                   const docRef = doc(usersRef, u.id);
+                   batch.set(docRef, u);
+                });
+                const settingsRef = doc(dbInstance, SETTINGS_DOC_PATH, 'main');
+                batch.set(settingsRef, INITIAL_SETTINGS);
+                await batch.commit();
+              } catch(e) {
+                console.warn("Impossibile scrivere i dati iniziali (permessi?), uso memoria locale.", e);
+              }
+
+           } else {
+              const loadedUsers = snap.docs.map(d => d.data());
+              loadedUsers.sort((a,b) => a.name.localeCompare(b.name));
+              setColleaguesList(loadedUsers);
+              
+              const settingsSnap = await getDoc(doc(dbInstance, SETTINGS_DOC_PATH, 'main'));
+              if (settingsSnap.exists()) setAppSettings(settingsSnap.data());
+           }
+         } catch (error) {
+           console.error("Errore lettura dati iniziali:", error);
+           // Fallback sui dati statici in caso di errore
+           setColleaguesList(INITIAL_COLLEAGUES);
+           setAppSettings(INITIAL_SETTINGS);
          }
          setDataLoaded(true);
       };
@@ -696,7 +728,11 @@ const App = () => {
               setIsShopOpen(true);
             }
           }
-        } catch (e) { console.error("Err date check", e); }
+        } catch (e) { 
+          console.error("Err date check", e);
+          // In caso di errore, assumiamo aperto se è un giorno valido
+          if(isBaseValid) setIsShopOpen(true); 
+        }
       };
 
       const initAuth = async () => {
@@ -715,13 +751,29 @@ const App = () => {
         if (u) {
           setIsAuthReady(true);
           setLoading(false);
-          // Check session persistence
-          const savedUserId = sessionStorage.getItem('mealAppUser');
-          // We need to wait for colleaguesList to be loaded before restoring session
+          clearTimeout(timeoutId); // Annulla timeout se successo
         }
       });
-    } catch (e) { console.error("Errore init:", e); setLoading(false); }
+    } catch (e) { 
+      console.error("Errore init:", e); 
+      setLoading(false);
+      clearTimeout(timeoutId);
+    }
+    
+    return () => clearTimeout(timeoutId);
   }, [demoMode]);
+
+  // Forzatura manuale caricamento se timeout scatta
+  useEffect(() => {
+    if (initTimeout && loading) {
+      console.warn("Timeout caricamento: forzo avvio con dati locali.");
+      setColleaguesList(INITIAL_COLLEAGUES);
+      setAppSettings(INITIAL_SETTINGS);
+      setDataLoaded(true);
+      setIsAuthReady(true); // Assumiamo auth ok o parziale
+      setLoading(false);
+    }
+  }, [initTimeout, loading]);
 
   // Restore user session when data is loaded
   useEffect(() => {
@@ -767,6 +819,8 @@ const App = () => {
         setOrderStatus('open');
         setOrderAuthor('');
       }
+    }, (err) => {
+      console.error("Errore listener ordini:", err);
     });
 
     return () => unsubscribe();
@@ -958,7 +1012,12 @@ const App = () => {
     window.location.href = mailtoLink;
   };
 
-  if (loading || !dataLoaded) return <div className="min-h-screen flex items-center justify-center"><LoadingSpinner text="Inizializzazione Database..." /></div>;
+  // Forza l'avvio manuale se lo spinner rimane troppo a lungo
+  const forceStart = () => {
+    setInitTimeout(true);
+  };
+
+  if (loading || !dataLoaded) return <div className="min-h-screen flex items-center justify-center"><LoadingSpinner text="Connessione al database..." onForceStart={forceStart} /></div>;
 
   if (!isShopOpen && !demoMode) return <ClosedScreen nextDate={getNextOpenDay(todayStr)} onEnableDemo={() => { setDemoMode(true); setIsShopOpen(true); }} />;
   if (!user) return <LoginScreen onLogin={handleLogin} demoMode={demoMode} onToggleDemo={() => setDemoMode(prev => !prev)} colleagues={colleaguesList} />;
