@@ -26,15 +26,15 @@ const SETTINGS_DOC_PATH = `${PUBLIC_DATA_PATH}/settings`;
 
 const BANNER_IMAGE_URL = "https://images.unsplash.com/photo-1559339352-11d035aa65de?q=80&w=2074&auto=format&fit=crop"; 
 
-// --- DATI INIZIALI (SEED) ---
-// 🔒 SICUREZZA: Questo è l'unico utente che verrà creato se premi "RIPRISTINA DB".
-// Usalo per accedere la prima volta, poi crea il tuo utente reale e cancella questo.
+// --- DATI INIZIALI (SOLO ADMIN) ---
+// Questa lista viene usata SOLO se fai il "Ripristino DB".
+// Dopo il ripristino, aggiungi gli altri colleghi dal pannello Gestione.
 const INITIAL_COLLEAGUES = [
   { 
-    id: 'admin_temp', 
-    name: 'Admin Provvisorio', 
-    email: 'admin@temp.it', 
-    pin: '0000', 
+    id: 'u_admin_master', 
+    name: 'Gioacchino Battaglia', 
+    email: 'gioacchino.battaglia@comune.formigine.mo.it', 
+    pin: '7378', 
     isAdmin: true 
   }
 ];
@@ -244,6 +244,15 @@ const LoginScreen = ({ onLogin, demoMode, onToggleDemo, colleagues = [], onReset
       setPin('');
     }
   };
+  
+  const handleResetClick = () => {
+      const pwd = prompt("Inserisci la password per resettare il database:");
+      if (pwd === "admin") {
+          onResetDB();
+      } else {
+          alert("Password errata. Operazione annullata.");
+      }
+  };
 
   return (
     <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
@@ -324,7 +333,7 @@ const LoginScreen = ({ onLogin, demoMode, onToggleDemo, colleagues = [], onReset
            
            {/* PULSANTE RESET DB */}
            <button 
-             onClick={onResetDB}
+             onClick={handleResetClick}
              className="text-[10px] text-red-400 hover:text-red-600 underline mt-2 font-bold bg-red-50 px-2 py-1 rounded"
            >
              ⚠️ RIPRISTINA UTENTI DA CODICE
@@ -421,6 +430,9 @@ const AdminPanel = ({ db, currentDay, onClose, initialColleagues, onUsersUpdate 
   const [newUser, setNewUser] = useState({ name: '', email: '', pin: '', isAdmin: false });
   // Stato per editing utente
   const [editingUser, setEditingUser] = useState(null);
+  
+  // Feedback di salvataggio
+  const [saveMsg, setSaveMsg] = useState('');
 
   useEffect(() => {
     const loadData = async () => {
@@ -461,12 +473,15 @@ const AdminPanel = ({ db, currentDay, onClose, initialColleagues, onUsersUpdate 
   // --- LOGICA UTENTI ---
   const addUser = async () => {
     if (!newUser.name || !newUser.pin) return alert("Nome e PIN obbligatori");
+    setSaveMsg('Salvataggio in corso...');
     const id = 'u_' + Date.now();
     const userToAdd = { ...newUser, id };
     
     await setDoc(doc(db, USERS_COLLECTION_PATH, id), userToAdd);
     setUsers([...users, userToAdd].sort((a,b) => a.name.localeCompare(b.name)));
     setNewUser({ name: '', email: '', pin: '', isAdmin: false });
+    setSaveMsg('✅ Utente salvato!');
+    setTimeout(() => setSaveMsg(''), 2000);
     onUsersUpdate(); // Notifica app principale per ricaricare lista
   };
 
@@ -546,6 +561,7 @@ const AdminPanel = ({ db, currentDay, onClose, initialColleagues, onUsersUpdate 
                         <button onClick={addUser} className="bg-blue-600 text-white px-3 py-1 rounded text-xs font-bold flex-1">AGGIUNGI</button>
                       </div>
                    </div>
+                   {saveMsg && <p className="text-center text-green-600 text-xs font-bold mt-2">{saveMsg}</p>}
                 </div>
 
                 {/* USER LIST */}
