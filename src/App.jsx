@@ -761,24 +761,30 @@ const App = () => {
   const takeoutOrders = orders.filter(o => o.isTakeout);
 
   return (
-    <div className="min-h-screen bg-gray-100 font-sans p-2 sm:p-6 pb-20">
+    <div className={`min-h-screen font-sans p-2 sm:p-6 pb-20 transition-colors duration-500 ${demoMode ? 'bg-purple-50' : 'bg-gray-100'}`}>
       
-      {/* DEMO BANNER */}
+      {/* DEMO BANNER MIGLIORATO */}
       {demoMode && (
-        <div className="bg-purple-600 text-white text-center text-xs font-bold p-1 absolute top-0 left-0 w-full z-[60]">
-          MODALITÀ DEMO ATTIVA (Blocchi disabilitati - Data odierna usata)
+        <div className="max-w-5xl mx-auto mb-4 bg-purple-600 text-white text-center p-3 rounded-xl shadow-lg border-2 border-purple-400 flex flex-col sm:flex-row items-center justify-center gap-2 animate-pulse">
+          <span className="text-2xl">🧪</span>
+          <div className="leading-tight">
+            <p className="font-bold text-lg">MODALITÀ DEMO ATTIVA</p>
+            <p className="text-xs text-purple-200">I blocchi orari sono disabilitati per testare l'invio.</p>
+          </div>
+          <button 
+             onClick={() => setDemoMode(false)}
+             className="mt-2 sm:mt-0 sm:ml-4 bg-white text-purple-700 px-4 py-1 rounded-full text-sm font-bold hover:bg-gray-100 shadow-sm transition-transform hover:scale-105"
+          >
+            Esci dalla Demo
+          </button>
         </div>
       )}
 
-      <div className={`max-w-5xl mx-auto bg-white shadow-xl rounded-2xl overflow-hidden relative ${demoMode ? 'mt-4' : ''}`}>
+      <div className={`max-w-5xl mx-auto bg-white shadow-xl rounded-2xl overflow-hidden relative transition-all duration-300 ${demoMode ? 'border-4 border-purple-500 ring-4 ring-purple-200 transform scale-[0.99]' : ''}`}>
         
         {/* TOP BAR */}
         <div className="absolute top-4 right-4 z-50 flex gap-2">
-          {demoMode && (
-             <button onClick={() => setDemoMode(false)} className="bg-purple-100 hover:bg-purple-200 text-purple-800 text-xs font-bold px-3 py-1 rounded-full shadow border border-purple-300">
-               Esci Demo
-             </button>
-          )}
+          {/* Removed the small "Esci Demo" button here since it's in the banner now */}
           {user.isAdmin && (
             <>
               <button onClick={() => setShowAdminCal(true)} className="bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold px-3 py-1 rounded-full shadow border border-orange-400">
