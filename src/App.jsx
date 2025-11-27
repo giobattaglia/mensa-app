@@ -136,11 +136,14 @@ const HelpModal = ({ onClose }) => (
           </ul>
         </div>
         
-        <div className="bg-gray-100 p-4 rounded-lg border border-gray-300">
-          <h3 className="font-bold text-gray-800 border-b border-gray-300 pb-1 mb-2">3. Dopo le 12:00 (STOP)</h3>
-          <p className="text-sm text-gray-700">
-            Alle 12:00 il sistema si blocca per tutti. Solo l'Admin può forzare modifiche o invii tardivi.
-          </p>
+        <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
+          <h3 className="font-bold text-orange-800 border-b border-orange-300 pb-1 mb-2">3. Funzioni Admin</h3>
+          <ul className="list-disc pl-5 space-y-2 text-sm text-orange-700">
+            <li>Solo l'Admin (Gioacchino) vede il pulsante <strong>"Gestione"</strong> in alto a destra.</li>
+            <li>Serve per bloccare i giorni di ferie (Lunedì o Giovedì chiusi).</li>
+            <li>L'Admin può <strong>sbloccare</strong> un ordine chiuso per errore.</li>
+            <li>L'Admin può <strong>ordinare per conto di altri</strong> o cancellare ordini errati usando i tasti ✏️ e 🗑️.</li>
+          </ul>
         </div>
       </div>
 
@@ -335,6 +338,9 @@ const App = () => {
   const [orders, setOrders] = useState([]);
   const [orderStatus, setOrderStatus] = useState('open'); 
   
+  // STATO PER "ORDINA PER CONTO DI"
+  const [actingAsUser, setActingAsUser] = useState(null);
+
   const [dishName, setDishName] = useState('');
   const [selectedWater, setSelectedWater] = useState(''); 
   const [diningChoice, setDiningChoice] = useState('');
@@ -415,7 +421,10 @@ const App = () => {
           const savedUserId = sessionStorage.getItem('mealAppUser');
           if (savedUserId) {
             const found = COLLEAGUES.find(c => c.id === savedUserId);
-            if (found) setUser(found);
+            if (found) {
+               setUser(found);
+               setActingAsUser(found); // Default: agisco per me stesso
+            }
           }
         }
       });
@@ -434,12 +443,18 @@ const App = () => {
         setOrders(data.orders || []);
         setOrderStatus(data.status || 'open');
         
-        if (user) {
-          const myOrder = (data.orders || []).find(o => o.userId === user.id);
-          if (myOrder) {
-            setDishName(myOrder.itemName || '');
-            setSelectedWater(myOrder.waterChoice || '');
-            setDiningChoice(myOrder.isTakeout ? 'asporto' : 'bar');
+        // Aggiorna form se ho già ordinato per l'utente corrente (me stesso o target)
+        if (actingAsUser) {
+          const existingOrder = (data.orders || []).find(o => o.userId === actingAsUser.id);
+          if (existingOrder) {
+            setDishName(existingOrder.itemName || '');
+            setSelectedWater(existingOrder.waterChoice || '');
+            setDiningChoice(existingOrder.isTakeout ? 'asporto' : 'bar');
+          } else {
+            // Se cambio target e lui non ha ordinato, pulisco il form
+            setDishName('');
+            setSelectedWater('');
+            setDiningChoice('');
           }
         }
       } else {
@@ -449,24 +464,48 @@ const App = () => {
     });
 
     return () => unsubscribe();
-  }, [db, isAuthReady, todayStr, user, isShopOpen]);
+  }, [db, isAuthReady, todayStr, user, actingAsUser, isShopOpen]); // Aggiunto actingAsUser alle dipendenze
 
   const handleLogin = (colleague) => {
     setUser(colleague);
+    setActingAsUser(colleague);
     sessionStorage.setItem('mealAppUser', colleague.id);
   };
 
   const handleLogout = () => {
     setUser(null);
+    setActingAsUser(null);
     sessionStorage.removeItem('mealAppUser');
     setDishName('');
     setSelectedWater('');
     setDiningChoice('');
   };
 
+  const handleAdminUserChange = (e) => {
+      const targetId = e.target.value;
+      const targetUser = COLLEAGUES.find(c => c.id === targetId);
+      if (targetUser) {
+          setActingAsUser(targetUser);
+          setMessage(''); 
+      }
+  };
+
+  const adminEditOrder = (targetUserId) => {
+      const targetUser = COLLEAGUES.find(c => c.id === targetUserId);
+      if(targetUser) setActingAsUser(targetUser);
+  };
+
+  const adminDeleteOrder = async (targetUserId) => {
+      if (!confirm("Sei sicuro di voler eliminare questo ordine?")) return;
+      try {
+        const orderRef = doc(db, PUBLIC_ORDERS_COLLECTION, todayStr);
+        await updateDoc(orderRef, { orders: orders.filter(o => o.userId !== targetUserId) });
+      } catch(e) { console.error(e); }
+  };
+
   const placeOrder = async () => {
     // BLOCCO RIGOROSO DOPO LE 12:00 (Salvo Admin)
-    if (orderStatus === 'sent') { alert("Ordine già inviato al bar! Non puoi modificare."); return; }
+    if (orderStatus === 'sent' && !user.isAdmin) { alert("Ordine già inviato al bar! Non puoi modificare."); return; }
     if (isEverythingClosed && !user.isAdmin) { alert("Troppo tardi! Sono passate le 12:00. Solo l'admin può modificare."); return; }
 
     const newErrors = {};
@@ -486,9 +525,10 @@ const App = () => {
     const orderRef = doc(db, PUBLIC_ORDERS_COLLECTION, todayStr);
     const cleanDishName = dishName.charAt(0).toUpperCase() + dishName.slice(1);
 
+    // Usiamo actingAsUser per determinare per chi stiamo ordinando
     const newOrder = {
-      userId: user.id,
-      userName: user.name,
+      userId: actingAsUser.id,
+      userName: actingAsUser.name,
       itemName: cleanDishName,
       waterChoice: selectedWater,
       isTakeout: diningChoice === 'asporto',
@@ -497,19 +537,25 @@ const App = () => {
 
     try {
       await setDoc(orderRef, { mealDate: todayStr }, { merge: true });
-      const updatedOrders = orders.filter(o => o.userId !== user.id).concat([newOrder]);
+      // Rimuoviamo eventuali ordini vecchi per QUESTO utente specifico
+      const updatedOrders = orders.filter(o => o.userId !== actingAsUser.id).concat([newOrder]);
       await updateDoc(orderRef, { orders: updatedOrders });
       
-      setMessage("Ordine salvato! Ricordati di inviare se sei l'ultimo.");
+      if (user.id === actingAsUser.id) {
+          setMessage("Ordine salvato! Ricordati di inviare se sei l'ultimo.");
+      } else {
+          setMessage(`Ordine salvato per ${actingAsUser.name}!`);
+      }
       setErrors({});
     } catch (e) { console.error(e); setMessage("Errore invio ordine"); }
   };
 
   const cancelOrder = async () => {
-    if (orderStatus === 'sent') { alert("Ordine già inviato al bar! Non puoi cancellare."); return; }
+    if (orderStatus === 'sent' && !user.isAdmin) { alert("Ordine già inviato al bar! Non puoi cancellare."); return; }
     try {
       const orderRef = doc(db, PUBLIC_ORDERS_COLLECTION, todayStr);
-      await updateDoc(orderRef, { orders: orders.filter(o => o.userId !== user.id) });
+      // Cancelliamo l'ordine dell'utente corrente (actingAsUser)
+      await updateDoc(orderRef, { orders: orders.filter(o => o.userId !== actingAsUser.id) });
       setDishName('');
       setSelectedWater('');
       setDiningChoice('');
@@ -728,9 +774,30 @@ const App = () => {
           {/* LEFT: Ordine Utente */}
           <div className="lg:col-span-8 space-y-6">
             
-            <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 flex flex-col sm:flex-row items-center gap-3">
-              <span className="text-blue-800 font-medium">Ciao,</span>
-              <span className="font-bold text-xl text-blue-900">{user.name}</span>
+            <div className={`bg-blue-50 p-4 rounded-lg border border-blue-100 flex flex-col gap-2 ${user.isAdmin ? 'border-l-4 border-l-orange-400' : ''}`}>
+              <div className="flex items-center gap-3">
+                 <span className="text-blue-800 font-medium">Ciao,</span>
+                 <span className="font-bold text-xl text-blue-900">{user.name}</span>
+                 {user.isAdmin && <span className="bg-orange-100 text-orange-700 text-[10px] px-2 py-0.5 rounded border border-orange-300">ADMIN</span>}
+              </div>
+              
+              {/* ADMIN: SELETTORE UTENTE */}
+              {user.isAdmin && (
+                <div className="mt-2 pt-2 border-t border-blue-200">
+                    <label className="text-xs font-bold text-orange-700 uppercase block mb-1">👑 Admin: Stai ordinando per...</label>
+                    <select 
+                        value={actingAsUser.id}
+                        onChange={handleAdminUserChange}
+                        className="w-full p-2 text-sm border border-orange-300 rounded bg-white focus:ring-2 focus:ring-orange-500 outline-none"
+                    >
+                        {COLLEAGUES.map(c => (
+                            <option key={c.id} value={c.id}>
+                                {c.id === user.id ? 'Me Stesso' : c.name}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+              )}
             </div>
 
             {/* SEZIONE 1: PIATTO */}
@@ -795,7 +862,7 @@ const App = () => {
                 </div>
 
                 <div className="pt-2 border-t mt-2">
-                   {orderStatus === 'sent' ? (
+                   {orderStatus === 'sent' && !user.isAdmin ? (
                       <div className="bg-green-100 p-3 rounded-lg text-center border border-green-300">
                         <span className="text-green-800 font-bold text-lg">🔒 Ordine Inviato</span>
                         <p className="text-green-700 text-xs">Non è più possibile modificare le scelte.</p>
@@ -805,20 +872,21 @@ const App = () => {
                         <span className="text-red-800 font-bold text-lg">🛑 Ordini Chiusi</span>
                         <p className="text-red-700 text-xs">Le prenotazioni chiudono alle 12:00.</p>
                       </div>
-                   ) : orders.some(o => o.userId === user.id) ? (
+                   ) : orders.some(o => o.userId === actingAsUser.id) ? (
                       <div className="flex items-center justify-between bg-green-50 p-2 rounded border border-green-200">
                         <div>
                             <span className="text-green-800 font-bold text-sm block">Ordine Salvato!</span>
                             <span className="text-green-600 text-xs truncate max-w-[150px] inline-block">{dishName}</span>
+                            {user.isAdmin && actingAsUser.id !== user.id && <span className="text-[10px] text-orange-600 block">(per {actingAsUser.name})</span>}
                         </div>
                         <button onClick={cancelOrder} className="text-xs text-red-600 underline hover:text-red-800 font-bold px-2 py-1 rounded hover:bg-red-50">Cancella</button>
                       </div>
                     ) : (
                       <button 
                         onClick={placeOrder} 
-                        className="w-full bg-green-700 hover:bg-green-800 text-white py-3 rounded-lg font-bold shadow-lg transform transition active:scale-95 flex items-center justify-center gap-2 uppercase tracking-wide"
+                        className={`w-full text-white py-3 rounded-lg font-bold shadow-lg transform transition active:scale-95 flex items-center justify-center gap-2 uppercase tracking-wide ${user.isAdmin && actingAsUser.id !== user.id ? 'bg-orange-600 hover:bg-orange-700' : 'bg-green-700 hover:bg-green-800'}`}
                       >
-                        <span>📨 Salva la tua scelta</span>
+                        <span>{user.isAdmin && actingAsUser.id !== user.id ? `📨 Ordina per ${actingAsUser.name.split(' ')[0]}` : '📨 Salva la tua scelta'}</span>
                       </button>
                     )}
                     {message && orderStatus !== 'sent' && !(isEverythingClosed && !user.isAdmin) && <p className={`text-center font-bold mt-2 text-sm animate-pulse ${message.includes('Errore') || message.includes('evidenziati') ? 'text-red-600' : 'text-green-600'}`}>{message}</p>}
@@ -901,14 +969,20 @@ const App = () => {
                     </h4>
                     <div className="space-y-2">
                       {barOrders.map((order, i) => (
-                         <div key={order.userId} className="text-sm flex justify-between items-center p-2 rounded hover:bg-gray-50 border border-transparent hover:border-gray-200">
-                           <div className="flex items-center gap-2 overflow-hidden">
+                         <div key={order.userId} className="text-sm flex justify-between items-center p-2 rounded hover:bg-gray-50 border border-transparent hover:border-gray-200 group relative">
+                           <div className="flex items-center gap-2 overflow-hidden w-full">
                              <span className="text-gray-400 font-mono text-xs w-4">{i+1}.</span>
                              <span className="font-bold text-gray-700 whitespace-nowrap">{order.userName}</span>
-                             <span className="text-gray-600 truncate text-xs">- 🥗 {order.itemName}</span>
+                             <span className="text-gray-600 truncate text-xs flex-1">- 🥗 {order.itemName}</span>
+                             {user.isAdmin && (
+                                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button onClick={() => adminEditOrder(order.userId)} className="text-xs bg-blue-100 text-blue-600 p-1 rounded hover:bg-blue-200" title="Modifica">✏️</button>
+                                    <button onClick={() => adminDeleteOrder(order.userId)} className="text-xs bg-red-100 text-red-600 p-1 rounded hover:bg-red-200" title="Elimina">🗑️</button>
+                                </div>
+                             )}
                            </div>
                            {order.waterChoice && order.waterChoice !== 'Nessuna' && (
-                             <span className="text-xs text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">
+                             <span className="text-xs text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100 ml-2">
                                {order.waterChoice === 'Naturale' ? '💧' : '🫧'}
                              </span>
                            )}
@@ -926,14 +1000,20 @@ const App = () => {
                     </h4>
                     <div className="space-y-2">
                       {takeoutOrders.map((order, i) => (
-                         <div key={order.userId} className="text-sm flex justify-between items-center p-2 rounded hover:bg-gray-50 border border-transparent hover:border-gray-200">
-                           <div className="flex items-center gap-2 overflow-hidden">
+                         <div key={order.userId} className="text-sm flex justify-between items-center p-2 rounded hover:bg-gray-50 border border-transparent hover:border-gray-200 group relative">
+                           <div className="flex items-center gap-2 overflow-hidden w-full">
                              <span className="text-gray-400 font-mono text-xs w-4">{i+1}.</span>
                              <span className="font-bold text-gray-700 whitespace-nowrap">{order.userName}</span>
-                             <span className="text-gray-600 truncate text-xs">- 🥗 {order.itemName}</span>
+                             <span className="text-gray-600 truncate text-xs flex-1">- 🥗 {order.itemName}</span>
+                             {user.isAdmin && (
+                                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button onClick={() => adminEditOrder(order.userId)} className="text-xs bg-blue-100 text-blue-600 p-1 rounded hover:bg-blue-200" title="Modifica">✏️</button>
+                                    <button onClick={() => adminDeleteOrder(order.userId)} className="text-xs bg-red-100 text-red-600 p-1 rounded hover:bg-red-200" title="Elimina">🗑️</button>
+                                </div>
+                             )}
                            </div>
                            {order.waterChoice && order.waterChoice !== 'Nessuna' && (
-                             <span className="text-xs text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">
+                             <span className="text-xs text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100 ml-2">
                                {order.waterChoice === 'Naturale' ? '💧' : '🫧'}
                              </span>
                            )}
