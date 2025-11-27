@@ -38,7 +38,7 @@ const COLLEAGUES = [
 
 const BANNER_IMAGE_URL = "https://images.unsplash.com/photo-1559339352-11d035aa65de?q=80&w=2074&auto=format&fit=crop"; 
 const EMAIL_BAR = "gioacchino.battaglia@comune.formigine.mo.it"; 
-const PHONE_BAR = "0598751381";
+const PHONE_BAR = "059/8751381";
 
 // --- UTILITÀ CALENDARIO ---
 const formatDate = (date) => date.toISOString().split('T')[0];
