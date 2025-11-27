@@ -22,6 +22,7 @@ const PUBLIC_ORDERS_COLLECTION = `artifacts/${appId}/public/data/mealOrders`;
 const CONFIG_DOC_PATH = `artifacts/${appId}/public/data/config`; 
 
 // --- CONFIGURAZIONI UTENTE ---
+// IMPORTANTE: Aggiorna le email con quelle reali dei tuoi colleghi
 const COLLEAGUES = [
   { id: 'u1', name: 'Barbara Zucchi', email: 'b.zucchi@comune.formigine.mo.it', pin: '1111', isAdmin: false },
   { id: 'u2', name: 'Chiara Italiani', email: 'c_italiani@comune.formigine.mo.it', pin: '2222', isAdmin: false },
@@ -544,9 +545,9 @@ const App = () => {
     }, {});
     const water = orders.reduce((acc, o) => { const w = o.waterChoice || 'Nessuna'; acc[w] = (acc[w] || 0) + 1; return acc; }, {});
 
-    let text = `Ciao Laura,\n\n`;
+    let text = `Ciao Laura,\n`;
     text += `ecco il riepilogo dell'ordine di oggi ${todayDate.toLocaleDateString('it-IT')}.\n`;
-    text += `Ti segnalo gentilmente che gli ordini DA ASPORTO 🥡 e da consumare AL BAR ☕ sono tutti per le ore 13:30.\n\n`;
+    text += `Ti segnalo gentilmente che gli ordini DA ASPORTO 🥡 e da consumare AL BAR ☕ sono tutti per le ore 13:30.\n`;
     text += `Grazie come sempre per la disponibilità!\nA dopo\n\n`;
 
     text += `=========================================\n`;
