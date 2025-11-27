@@ -26,9 +26,9 @@ const SETTINGS_DOC_PATH = `${PUBLIC_DATA_PATH}/settings`;
 
 const BANNER_IMAGE_URL = "https://images.unsplash.com/photo-1559339352-11d035aa65de?q=80&w=2074&auto=format&fit=crop"; 
 
-// --- DATI INIZIALI (SOLO ADMIN) ---
-// Questa lista viene usata SOLO se fai il "Ripristino DB".
-// Dopo il ripristino, aggiungi gli altri colleghi dal pannello Gestione.
+// --- DATI INIZIALI PER IL RESET ---
+// Usati SOLO quando premi "RIPRISTINA DB".
+// Ho messo GIOACCHINO come unico utente iniziale.
 const INITIAL_COLLEAGUES = [
   { 
     id: 'u_admin_master', 
@@ -250,7 +250,7 @@ const LoginScreen = ({ onLogin, demoMode, onToggleDemo, colleagues = [], onReset
       if (pwd === "admin") {
           onResetDB();
       } else {
-          alert("Password errata. Operazione annullata.");
+          // Se annulla o sbaglia password, non fa nulla
       }
   };
 
@@ -336,7 +336,7 @@ const LoginScreen = ({ onLogin, demoMode, onToggleDemo, colleagues = [], onReset
              onClick={handleResetClick}
              className="text-[10px] text-red-400 hover:text-red-600 underline mt-2 font-bold bg-red-50 px-2 py-1 rounded"
            >
-             ⚠️ RIPRISTINA UTENTI DA CODICE
+             ⚠️ RIPRISTINA DB
            </button>
         </div>
       </div>
@@ -477,34 +477,45 @@ const AdminPanel = ({ db, currentDay, onClose, initialColleagues, onUsersUpdate 
     const id = 'u_' + Date.now();
     const userToAdd = { ...newUser, id };
     
-    await setDoc(doc(db, USERS_COLLECTION_PATH, id), userToAdd);
-    setUsers([...users, userToAdd].sort((a,b) => a.name.localeCompare(b.name)));
-    setNewUser({ name: '', email: '', pin: '', isAdmin: false });
-    setSaveMsg('✅ Utente salvato!');
-    setTimeout(() => setSaveMsg(''), 2000);
-    onUsersUpdate(); // Notifica app principale per ricaricare lista
+    try {
+      await setDoc(doc(db, USERS_COLLECTION_PATH, id), userToAdd);
+      setUsers([...users, userToAdd].sort((a,b) => a.name.localeCompare(b.name)));
+      setNewUser({ name: '', email: '', pin: '', isAdmin: false });
+      setSaveMsg('✅ Utente salvato!');
+      setTimeout(() => setSaveMsg(''), 2000);
+      onUsersUpdate(); // Notifica app principale per ricaricare lista
+    } catch (e) {
+      console.error(e);
+      setSaveMsg('❌ Errore salvataggio');
+    }
   };
 
   const deleteUser = async (id) => {
     if (!confirm("Eliminare utente?")) return;
-    await deleteDoc(doc(db, USERS_COLLECTION_PATH, id));
-    setUsers(users.filter(u => u.id !== id));
-    onUsersUpdate();
+    try {
+      await deleteDoc(doc(db, USERS_COLLECTION_PATH, id));
+      setUsers(users.filter(u => u.id !== id));
+      onUsersUpdate();
+    } catch (e) { console.error(e); alert("Errore eliminazione"); }
   };
 
   const saveEditUser = async () => {
      if(!editingUser) return;
-     await setDoc(doc(db, USERS_COLLECTION_PATH, editingUser.id), editingUser, {merge: true});
-     setUsers(users.map(u => u.id === editingUser.id ? editingUser : u));
-     setEditingUser(null);
-     onUsersUpdate();
+     try {
+       await setDoc(doc(db, USERS_COLLECTION_PATH, editingUser.id), editingUser, {merge: true});
+       setUsers(users.map(u => u.id === editingUser.id ? editingUser : u));
+       setEditingUser(null);
+       onUsersUpdate();
+     } catch (e) { console.error(e); alert("Errore modifica"); }
   };
 
   // --- LOGICA SETTINGS ---
   const saveSettings = async () => {
-    await setDoc(doc(db, SETTINGS_DOC_PATH, 'main'), settings, { merge: true });
-    alert("Impostazioni salvate!");
-    onUsersUpdate(); // Reload generale
+    try {
+      await setDoc(doc(db, SETTINGS_DOC_PATH, 'main'), settings, { merge: true });
+      alert("Impostazioni salvate!");
+      onUsersUpdate(); // Reload generale
+    } catch (e) { console.error(e); alert("Errore impostazioni"); }
   };
 
   const upcoming = ALLOWED_DATES_LIST.filter(d => d >= currentDay).slice(0, 10);
@@ -713,7 +724,7 @@ const App = () => {
         window.location.reload();
       } catch (e) {
         console.error(e);
-        alert("Errore durante il reset.");
+        alert(`Errore durante il reset: ${e.message}`); // Mostra errore specifico
         setLoading(false);
       }
   };
