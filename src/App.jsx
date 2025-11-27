@@ -17,11 +17,8 @@ const firebaseConfig = {
 const appId = 'mensa-app-v1'; 
 const initialAuthToken = null;
 
-// Percorsi Firestore
-const PUBLIC_ORDERS_COLLECTION = `artifacts/${appId}/public/data/mealOrders`;
-const CONFIG_DOC_PATH = `artifacts/${appId}/public/data/config`; 
-
 // --- CONFIGURAZIONI UTENTE ---
+// IMPORTANTE: Aggiorna le email con quelle reali dei tuoi colleghi
 const COLLEAGUES = [
   { id: 'u1', name: 'Barbara Zucchi', email: 'b.zucchi@comune.formigine.mo.it', pin: '1111', isAdmin: false },
   { id: 'u2', name: 'Chiara Italiani', email: 'c_italiani@comune.formigine.mo.it', pin: '2222', isAdmin: false },
@@ -550,7 +547,7 @@ const App = () => {
 
     let text = `Ciao Laura,\n\n`;
     text += `Ecco il riepilogo dell'ordine di oggi.\n`;
-    text += `Ti segnalo gentilmente che gli ordini da asporto e da consumare al bar sono tutti per le ore 13:30.\n\n`;
+    text += `Ti segnalo gentilmente che gli ordini da asporto 🥡 e da consumare al bar ☕ sono tutti per le ore 13:30.\n\n`;
     text += `Grazie come sempre per la disponibilità!\nA dopo\n\n`;
 
     text += `=========================================\n`;
@@ -558,21 +555,21 @@ const App = () => {
     text += `TOTALE ORDINI: ${orders.length}\n`;
     text += `=========================================\n\n`;
     
-    text += "--- PIATTI ---\n";
+    text += "--- 🍽️ PIATTI ---\n";
     Object.entries(grouped).forEach(([name, count]) => {
       text += `${count}x ${name}\n`;
     });
 
-    text += "\n--- ACQUA ---\n";
-    if (water['Naturale']) text += `Naturale: ${water['Naturale']}\n`;
-    if (water['Frizzante']) text += `Frizzante: ${water['Frizzante']}\n`;
+    text += "\n--- 💧 ACQUA ---\n";
+    if (water['Naturale']) text += `💧 Naturale: ${water['Naturale']}\n`;
+    if (water['Frizzante']) text += `🫧 Frizzante: ${water['Frizzante']}\n`;
 
-    text += "\n--- DETTAGLIO PER COLLEGA ---\n";
+    text += "\n--- 👥 DETTAGLIO PER COLLEGA ---\n";
     orders.forEach(o => {
-      text += `- ${o.userName}: ${o.itemName}`;
-      if (o.waterChoice && o.waterChoice !== 'Nessuna') text += ` [${o.waterChoice}]`;
-      if (o.isTakeout) text += ` (DA ASPORTO)`;
-      text += "\n";
+      const waterEmoji = o.waterChoice === 'Naturale' ? '💧' : (o.waterChoice === 'Frizzante' ? '🫧' : '');
+      const diningEmoji = o.isTakeout ? '🥡' : '☕';
+      
+      text += `- ${o.userName}: 🍽️ ${o.itemName} ${waterEmoji} ${diningEmoji}\n`;
     });
     return text;
   };
