@@ -78,7 +78,7 @@ const LoadingSpinner = () => (
 
 // --- COMPONENTI UI ---
 
-const ClosedScreen = ({ nextDate }) => {
+const ClosedScreen = ({ nextDate, onEnableDemo }) => {
   const nextDateObj = new Date(nextDate);
   const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
   const formattedNext = nextDateObj.toLocaleDateString('it-IT', options);
@@ -96,9 +96,20 @@ const ClosedScreen = ({ nextDate }) => {
           Il servizio prenotazione è attivo solo il <strong>Lunedì</strong> e il <strong>Giovedì</strong>.
         </p>
         
-        <div className="bg-green-50 p-4 rounded-lg border border-green-200 inline-block w-full">
+        <div className="bg-green-50 p-4 rounded-lg border border-green-200 inline-block w-full mb-6">
           <p className="text-sm text-green-800 font-bold uppercase tracking-wider mb-1">Prossima Apertura</p>
           <p className="text-2xl text-green-900 font-serif capitalize">{formattedNext}</p>
+        </div>
+
+        {/* TASTO DEMO PER TESTARE */}
+        <div className="border-t pt-4">
+          <p className="text-xs text-gray-500 mb-2">Devi fare una prova tecnica?</p>
+          <button 
+            onClick={onEnableDemo}
+            className="bg-purple-100 hover:bg-purple-200 text-purple-700 text-sm font-bold py-2 px-4 rounded-full transition-colors flex items-center justify-center gap-2 mx-auto"
+          >
+            <span>🧪</span> Attiva Modalità DEMO
+          </button>
         </div>
       </div>
     </div>
@@ -129,8 +140,8 @@ const HelpModal = ({ onClose }) => (
           <h3 className="font-bold text-red-800 border-b border-red-300 pb-1 mb-2">2. Invio Ordine (Entro le 12:00)</h3>
           <ul className="list-disc pl-5 space-y-2 text-sm text-red-700">
             <li>Dalle 10:30 apparirà un avviso rosso lampeggiante.</li>
-            <li><strong>CHIUNQUE</strong> (Admin o Collega) può inviare l'email (entro le 12:00).</li>
-            <li>Clicca su <strong>"Gmail Web"</strong> (da PC) o <strong>"App Email"</strong> (da Cellulare).</li>
+            <li><strong>CHIUNQUE</strong> (Admin o Collega) può inviare l'email se l'Admin non c'è.</li>
+            <li>Clicca su <strong>"Apri Gmail"</strong> (da PC) o <strong>"App Email"</strong> (da Cellulare).</li>
             <li>Premi invia nella tua mail.</li>
             <li>Torna qui e clicca <strong>"CONFERMA INVIO"</strong> per bloccare l'ordine.</li>
           </ul>
@@ -142,7 +153,6 @@ const HelpModal = ({ onClose }) => (
             <li>Solo l'Admin (Gioacchino) vede il pulsante <strong>"Gestione"</strong> in alto a destra.</li>
             <li>Serve per bloccare i giorni di ferie (Lunedì o Giovedì chiusi).</li>
             <li>L'Admin può <strong>sbloccare</strong> un ordine chiuso per errore.</li>
-            <li>L'Admin può <strong>ordinare per conto di altri</strong> o cancellare ordini errati usando i tasti ✏️ e 🗑️.</li>
           </ul>
         </div>
       </div>
@@ -274,6 +284,81 @@ const LoginScreen = ({ onLogin }) => {
   );
 };
 
+// --- COMPONENTE ADMIN: STORICO ORDINI ---
+const AdminHistory = ({ db, onClose }) => {
+  const [selectedDate, setSelectedDate] = useState(formatDate(new Date()));
+  const [historyOrders, setHistoryOrders] = useState([]);
+  const [historyStatus, setHistoryStatus] = useState('');
+  const [historyAuthor, setHistoryAuthor] = useState('');
+  const [loadingHistory, setLoadingHistory] = useState(false);
+
+  const loadHistory = async (dateStr) => {
+    setLoadingHistory(true);
+    try {
+      const docRef = doc(db, PUBLIC_ORDERS_COLLECTION, dateStr);
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        setHistoryOrders(docSnap.data().orders || []);
+        setHistoryStatus(docSnap.data().status || 'open');
+        setHistoryAuthor(docSnap.data().confirmedBy || '');
+      } else {
+        setHistoryOrders([]);
+        setHistoryStatus('Nessun ordine trovato');
+        setHistoryAuthor('');
+      }
+    } catch (e) { console.error(e); }
+    setLoadingHistory(false);
+  };
+
+  useEffect(() => {
+    loadHistory(selectedDate);
+  }, [selectedDate]);
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+      <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full p-6 relative h-[80vh] flex flex-col">
+        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-2xl font-bold">&times;</button>
+        <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">📜 Archivio Storico</h2>
+        
+        <div className="flex gap-4 items-center mb-4 bg-gray-50 p-3 rounded border">
+          <label className="font-bold text-sm">Seleziona Data:</label>
+          <input 
+            type="date" 
+            value={selectedDate} 
+            onChange={(e) => setSelectedDate(e.target.value)} 
+            className="border p-1 rounded"
+          />
+        </div>
+
+        <div className="flex-1 overflow-y-auto border rounded-lg p-4 bg-gray-50">
+           {loadingHistory ? <p>Caricamento...</p> : (
+             historyOrders.length === 0 ? <p className="text-gray-500 italic">Nessun ordine in questa data.</p> : (
+               <div className="space-y-2">
+                 {historyStatus === 'sent' && (
+                    <div className="bg-green-100 border border-green-300 text-green-800 p-2 rounded text-sm font-bold mb-3 text-center">
+                        ✅ Ordine inviato da: {historyAuthor || 'Sconosciuto'}
+                    </div>
+                 )}
+                 {historyOrders.map((o, i) => (
+                   <div key={i} className="bg-white p-2 rounded border flex justify-between text-sm items-center">
+                      <div className="flex gap-2 items-center">
+                        <span className="font-bold text-gray-700">{o.userName}</span>
+                        <span className="text-gray-600">{o.itemName}</span>
+                      </div>
+                      <span className={`text-xs px-2 py-1 rounded font-bold ${o.isTakeout ? "bg-red-100 text-red-600" : "bg-orange-100 text-orange-600"}`}>
+                        {o.isTakeout ? "🥡 Asporto" : "☕ Bar"}
+                      </span>
+                   </div>
+                 ))}
+               </div>
+             )
+           )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // --- COMPONENTE ADMIN: GESTIONE FERIE ---
 const AdminCalendarManager = ({ db, currentDay, onClose }) => {
   const [blockedDates, setBlockedDates] = useState([]);
@@ -335,10 +420,13 @@ const App = () => {
   const [user, setUser] = useState(null); 
   const [isAuthReady, setIsAuthReady] = useState(false);
   
+  // STATO DEMO MODE
+  const [demoMode, setDemoMode] = useState(false);
+
   const [orders, setOrders] = useState([]);
   const [orderStatus, setOrderStatus] = useState('open'); 
+  const [orderAuthor, setOrderAuthor] = useState('');
   
-  // STATO PER "ORDINA PER CONTO DI"
   const [actingAsUser, setActingAsUser] = useState(null);
 
   const [dishName, setDishName] = useState('');
@@ -350,6 +438,7 @@ const App = () => {
   const [message, setMessage] = useState('');
   const [showHelp, setShowHelp] = useState(false); 
   const [showAdminCal, setShowAdminCal] = useState(false);
+  const [showHistory, setShowHistory] = useState(false); 
 
   const todayDate = new Date();
   const todayStr = formatDate(todayDate);
@@ -362,15 +451,13 @@ const App = () => {
     return () => clearInterval(timer);
   }, []);
   
-  const hour = time.getHours();
-  const minute = time.getMinutes();
+  const hour = demoMode ? 10 : time.getHours();
+  const minute = demoMode ? 0 : time.getMinutes();
 
-  // LOGICA ORARIA AGGIORNATA
-  // Warning (Giallo/Rosso): Dalle 10:30 fino alle 11:59
+  // LOGICA ORARIA
   const isLateWarning = (hour === 10 && minute >= 30) || (hour === 11);
-  
-  // STOP TOTALE (Blocco Ordini E Email per normali): Dalle 12:00 in poi
-  const isEverythingClosed = hour >= 12;
+  const isBookingClosed = hour >= 12;
+  const isEmailClosed = hour >= 13;
 
   // 1. INIT FIREBASE & DATE CHECK
   useEffect(() => {
@@ -384,7 +471,7 @@ const App = () => {
 
       const checkDateAccess = async () => {
         const isBaseValid = ALLOWED_DATES_LIST.includes(todayStr);
-        if (!isBaseValid) {
+        if (!isBaseValid && !demoMode) { 
           setIsShopOpen(false);
           setLoading(false);
           return;
@@ -396,8 +483,10 @@ const App = () => {
           if (snap.exists()) {
             const blocked = snap.data().dates || [];
             setBlockedDates(blocked);
-            if (blocked.includes(todayStr)) {
+            if (blocked.includes(todayStr) && !demoMode) {
               setIsShopOpen(false);
+            } else {
+              setIsShopOpen(true);
             }
           }
         } catch (e) { console.error("Err date check", e); }
@@ -423,17 +512,17 @@ const App = () => {
             const found = COLLEAGUES.find(c => c.id === savedUserId);
             if (found) {
                setUser(found);
-               setActingAsUser(found); // Default: agisco per me stesso
+               setActingAsUser(found); 
             }
           }
         }
       });
     } catch (e) { console.error("Errore init:", e); setLoading(false); }
-  }, []);
+  }, [demoMode]);
 
   // LISTENER ORDINI
   useEffect(() => {
-    if (!db || !isAuthReady || !isShopOpen) return;
+    if (!db || !isAuthReady || (!isShopOpen && !demoMode)) return;
     
     const docRef = doc(db, PUBLIC_ORDERS_COLLECTION, todayStr);
     
@@ -442,8 +531,8 @@ const App = () => {
         const data = docSnap.data();
         setOrders(data.orders || []);
         setOrderStatus(data.status || 'open');
+        setOrderAuthor(data.confirmedBy || '');
         
-        // Aggiorna form se ho già ordinato per l'utente corrente (me stesso o target)
         if (actingAsUser) {
           const existingOrder = (data.orders || []).find(o => o.userId === actingAsUser.id);
           if (existingOrder) {
@@ -451,7 +540,6 @@ const App = () => {
             setSelectedWater(existingOrder.waterChoice || '');
             setDiningChoice(existingOrder.isTakeout ? 'asporto' : 'bar');
           } else {
-            // Se cambio target e lui non ha ordinato, pulisco il form
             setDishName('');
             setSelectedWater('');
             setDiningChoice('');
@@ -460,11 +548,12 @@ const App = () => {
       } else {
         setOrders([]);
         setOrderStatus('open');
+        setOrderAuthor('');
       }
     });
 
     return () => unsubscribe();
-  }, [db, isAuthReady, todayStr, user, actingAsUser, isShopOpen]); // Aggiunto actingAsUser alle dipendenze
+  }, [db, isAuthReady, todayStr, user, actingAsUser, isShopOpen, demoMode]);
 
   const handleLogin = (colleague) => {
     setUser(colleague);
@@ -504,9 +593,8 @@ const App = () => {
   };
 
   const placeOrder = async () => {
-    // BLOCCO RIGOROSO DOPO LE 12:00 (Salvo Admin)
     if (orderStatus === 'sent' && !user.isAdmin) { alert("Ordine già inviato al bar! Non puoi modificare."); return; }
-    if (isEverythingClosed && !user.isAdmin) { alert("Troppo tardi! Sono passate le 12:00. Solo l'admin può modificare."); return; }
+    if (isBookingClosed && !user.isAdmin) { alert("Troppo tardi! Sono passate le 12:00. Solo l'admin può modificare."); return; }
 
     const newErrors = {};
     let hasError = false;
@@ -525,7 +613,6 @@ const App = () => {
     const orderRef = doc(db, PUBLIC_ORDERS_COLLECTION, todayStr);
     const cleanDishName = dishName.charAt(0).toUpperCase() + dishName.slice(1);
 
-    // Usiamo actingAsUser per determinare per chi stiamo ordinando
     const newOrder = {
       userId: actingAsUser.id,
       userName: actingAsUser.name,
@@ -537,7 +624,6 @@ const App = () => {
 
     try {
       await setDoc(orderRef, { mealDate: todayStr }, { merge: true });
-      // Rimuoviamo eventuali ordini vecchi per QUESTO utente specifico
       const updatedOrders = orders.filter(o => o.userId !== actingAsUser.id).concat([newOrder]);
       await updateDoc(orderRef, { orders: updatedOrders });
       
@@ -554,7 +640,6 @@ const App = () => {
     if (orderStatus === 'sent' && !user.isAdmin) { alert("Ordine già inviato al bar! Non puoi cancellare."); return; }
     try {
       const orderRef = doc(db, PUBLIC_ORDERS_COLLECTION, todayStr);
-      // Cancelliamo l'ordine dell'utente corrente (actingAsUser)
       await updateDoc(orderRef, { orders: orders.filter(o => o.userId !== actingAsUser.id) });
       setDishName('');
       setSelectedWater('');
@@ -567,7 +652,10 @@ const App = () => {
     if (!confirm("Sei sicuro di aver inviato l'email? Questo bloccherà gli ordini per tutti.")) return;
     try {
       const orderRef = doc(db, PUBLIC_ORDERS_COLLECTION, todayStr);
-      await setDoc(orderRef, { status: 'sent' }, { merge: true });
+      await setDoc(orderRef, { 
+        status: 'sent',
+        confirmedBy: user.name 
+      }, { merge: true });
     } catch (e) { console.error("Errore update status", e); }
   };
 
@@ -575,7 +663,7 @@ const App = () => {
     if (!confirm("Vuoi davvero riaprire l'ordine? Gli utenti potranno modificare le loro scelte.")) return;
     try {
       const orderRef = doc(db, PUBLIC_ORDERS_COLLECTION, todayStr);
-      await setDoc(orderRef, { status: 'open' }, { merge: true });
+      await setDoc(orderRef, { status: 'open', confirmedBy: '' }, { merge: true });
     } catch (e) { console.error("Errore sblocco", e); }
   };
 
@@ -638,40 +726,70 @@ const App = () => {
   };
 
   const openGmail = () => {
-    const subject = encodeURIComponent(`Ordine Pranzo Ufficio - ${todayDate.toLocaleDateString('it-IT')}`);
+    // DEMO: Manda a utente corrente. REALE: Manda al Bar.
+    const recipientEmail = demoMode ? user.email : EMAIL_BAR;
+    const subjectPrefix = demoMode ? "[TEST] " : "";
+    const subject = encodeURIComponent(`${subjectPrefix}Ordine Pranzo Ufficio - ${todayDate.toLocaleDateString('it-IT')}`);
     const body = encodeURIComponent(generateEmailText());
-    const ccEmails = getAllEmails();
-    const gmailLink = `https://mail.google.com/mail/?view=cm&fs=1&to=${EMAIL_BAR}&cc=${ccEmails}&su=${subject}&body=${body}`;
+    // DEMO: Niente CC. REALE: Tutti in CC.
+    const ccEmails = demoMode ? "" : getAllEmails();
+
+    const gmailLink = `https://mail.google.com/mail/?view=cm&fs=1&to=${recipientEmail}&cc=${ccEmails}&su=${subject}&body=${body}`;
     window.open(gmailLink, '_blank');
   };
 
   const openDefaultMail = () => {
-    const subject = encodeURIComponent(`Ordine Pranzo Ufficio - ${todayDate.toLocaleDateString('it-IT')}`);
+    const recipientEmail = demoMode ? user.email : EMAIL_BAR;
+    const subjectPrefix = demoMode ? "[TEST] " : "";
+    const subject = encodeURIComponent(`${subjectPrefix}Ordine Pranzo Ufficio - ${todayDate.toLocaleDateString('it-IT')}`);
     const body = encodeURIComponent(generateEmailText());
-    const ccEmails = getAllEmails();
-    const mailtoLink = `mailto:${EMAIL_BAR}?cc=${ccEmails}&subject=${subject}&body=${body}`;
+    const ccEmails = demoMode ? "" : getAllEmails();
+
+    const mailtoLink = `mailto:${recipientEmail}?cc=${ccEmails}&subject=${subject}&body=${body}`;
     window.location.href = mailtoLink;
   };
 
   if (loading) return <div className="min-h-screen flex items-center justify-center"><LoadingSpinner /></div>;
 
-  if (!isShopOpen) return <ClosedScreen nextDate={getNextOpenDay(todayStr)} />;
+  if (!isShopOpen && !demoMode) return <ClosedScreen nextDate={getNextOpenDay(todayStr)} onEnableDemo={() => { setDemoMode(true); setIsShopOpen(true); }} />;
   if (!user) return <LoginScreen onLogin={handleLogin} />;
 
-  // Separazione ordini per visualizzazione
   const barOrders = orders.filter(o => !o.isTakeout);
   const takeoutOrders = orders.filter(o => o.isTakeout);
 
   return (
     <div className="min-h-screen bg-gray-100 font-sans p-2 sm:p-6 pb-20">
-      <div className="max-w-5xl mx-auto bg-white shadow-xl rounded-2xl overflow-hidden relative">
+      
+      {/* DEMO BANNER */}
+      {demoMode && (
+        <div className="bg-purple-600 text-white text-center text-xs font-bold p-1 absolute top-0 left-0 w-full z-[60]">
+          MODALITÀ DEMO ATTIVA (Blocchi disabilitati - Data odierna usata)
+        </div>
+      )}
+
+      <div className={`max-w-5xl mx-auto bg-white shadow-xl rounded-2xl overflow-hidden relative ${demoMode ? 'mt-4' : ''}`}>
         
         {/* TOP BAR */}
         <div className="absolute top-4 right-4 z-50 flex gap-2">
+          {demoMode && (
+             <button onClick={() => setDemoMode(false)} className="bg-purple-100 hover:bg-purple-200 text-purple-800 text-xs font-bold px-3 py-1 rounded-full shadow border border-purple-300">
+               Esci Demo
+             </button>
+          )}
           {user.isAdmin && (
-            <button onClick={() => setShowAdminCal(true)} className="bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold px-3 py-1 rounded-full shadow border border-orange-400">
-              📅 Gestione
-            </button>
+            <>
+              <button onClick={() => setShowAdminCal(true)} className="bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold px-3 py-1 rounded-full shadow border border-orange-400">
+                📅 Gestione
+              </button>
+              <button onClick={() => setShowHistory(true)} className="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold px-3 py-1 rounded-full shadow border border-purple-500">
+                📜 Storico
+              </button>
+            </>
+          )}
+          {!user.isAdmin && (
+             <button onClick={() => setShowHistory(true)} className="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold px-3 py-1 rounded-full shadow border border-purple-500">
+                📜 Storico
+             </button>
           )}
           <button onClick={() => setShowHelp(true)} className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-1 rounded-full shadow border border-blue-500 flex items-center gap-1">
             <span>ℹ️</span> Guida
@@ -684,6 +802,7 @@ const App = () => {
         {/* MODALI */}
         {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
         {showAdminCal && <AdminCalendarManager db={db} currentDay={todayStr} onClose={() => setShowAdminCal(false)} />}
+        {showHistory && <AdminHistory db={db} onClose={() => setShowHistory(false)} />}
 
         {/* BANNER */}
         <header 
@@ -714,13 +833,13 @@ const App = () => {
                   Data: <span className="text-white font-bold uppercase">{todayDate.toLocaleDateString('it-IT')}</span>
                 </div>
                 <div className="font-mono font-bold text-white flex items-center gap-2">
-                   {isLateWarning && orderStatus !== 'sent' && !isEverythingClosed && <span className="text-yellow-300 font-bold hidden sm:inline">⚠️ IN CHIUSURA </span>}
-                   {isEverythingClosed && orderStatus !== 'sent' && <span className="text-red-400 font-bold hidden sm:inline">🛑 TEMPO SCADUTO </span>}
-                   {time.toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'})}
+                   {isLateWarning && orderStatus !== 'sent' && !isEmailClosed && !demoMode && <span className="text-yellow-300 font-bold hidden sm:inline">⚠️ IN CHIUSURA </span>}
+                   {isEmailClosed && orderStatus !== 'sent' && !demoMode && <span className="text-red-400 font-bold hidden sm:inline">🛑 TEMPO SCADUTO </span>}
+                   {demoMode ? "10:00 (Simulato)" : time.toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'})}
                 </div>
             </div>
             <div className="flex items-center justify-center gap-2 text-xs sm:text-sm">
-                <div className={`flex items-center gap-1 px-3 py-1 rounded-full ${orderStatus !== 'sent' && !isEverythingClosed ? 'bg-green-600 font-bold' : 'bg-gray-700 text-gray-400'}`}>
+                <div className={`flex items-center gap-1 px-3 py-1 rounded-full ${orderStatus !== 'sent' && !isEmailClosed ? 'bg-green-600 font-bold' : 'bg-gray-700 text-gray-400'}`}>
                     <span className="bg-white text-gray-900 rounded-full w-4 h-4 flex items-center justify-center text-[10px]">1</span>
                     Raccolta
                 </div>
@@ -733,7 +852,7 @@ const App = () => {
         </div>
 
         {/* --- ALERT INVIO TARDIVO (10:30 - 12:00) --- */}
-        {isLateWarning && orderStatus !== 'sent' && !isEverythingClosed && (
+        {isLateWarning && orderStatus !== 'sent' && !isEmailClosed && !demoMode && (
           <div className="bg-red-100 border-b-4 border-red-500 p-4 text-center sticky top-0 z-40 shadow-xl animate-pulse">
              <h2 className="text-red-800 font-bold text-xl uppercase mb-2">⏰ È Tardi! Chiudi l'ordine</h2>
              <p className="text-red-600 mb-4 text-sm font-bold">Sono passate le 10:30. Il primo che vede questo messaggio deve inviare l'email!</p>
@@ -749,7 +868,7 @@ const App = () => {
         )}
 
         {/* --- ALERT CRITICO (12:00+) --- */}
-        {isEverythingClosed && orderStatus !== 'sent' && (
+        {isEmailClosed && orderStatus !== 'sent' && !demoMode && (
           <div className="bg-gray-900 border-b-4 border-red-600 p-6 text-center sticky top-0 z-50 shadow-2xl">
              <h2 className="text-white font-bold text-2xl uppercase mb-2">🛑 ORDINE WEB CHIUSO</h2>
              <p className="text-gray-300 mb-4 text-sm">Sono passate le 12:00. Non inviare più email, il bar non la leggerebbe.</p>
@@ -809,14 +928,14 @@ const App = () => {
                       setDishName(e.target.value);
                       if(errors.dishName) setErrors(prev => ({...prev, dishName: false}));
                     }}
-                    disabled={orderStatus === 'sent' || (isEverythingClosed && !user.isAdmin)}
-                    placeholder={(orderStatus === 'sent' || (isEverythingClosed && !user.isAdmin)) ? "Ordine chiuso" : "Es: Insalatona pollo e noci..."}
-                    className={`w-full border-2 p-3 rounded-lg text-lg font-bold text-gray-800 outline-none transition-all placeholder:font-normal placeholder:text-gray-300 ${errors.dishName ? 'border-red-400 bg-red-50' : 'border-green-100 focus:border-green-500'} ${(orderStatus === 'sent' || (isEverythingClosed && !user.isAdmin)) ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''}`}
+                    disabled={orderStatus === 'sent' || (isBookingClosed && !user.isAdmin && !demoMode)}
+                    placeholder={(orderStatus === 'sent' || (isBookingClosed && !user.isAdmin && !demoMode)) ? "Ordine chiuso" : "Es: Insalatona pollo e noci..."}
+                    className={`w-full border-2 p-3 rounded-lg text-lg font-bold text-gray-800 outline-none transition-all placeholder:font-normal placeholder:text-gray-300 ${errors.dishName ? 'border-red-400 bg-red-50' : 'border-green-100 focus:border-green-500'} ${(orderStatus === 'sent' || (isBookingClosed && !user.isAdmin && !demoMode)) ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''}`}
                 />
             </div>
 
             {/* SEZIONE 2 & 3 */}
-            <div className={`bg-white border-2 border-slate-200 p-5 rounded-xl shadow-lg sticky bottom-4 z-20 ${orderStatus === 'sent' || (isEverythingClosed && !user.isAdmin) ? 'opacity-75 grayscale' : ''}`}>
+            <div className={`bg-white border-2 border-slate-200 p-5 rounded-xl shadow-lg sticky bottom-4 z-20 ${orderStatus === 'sent' || (isBookingClosed && !user.isAdmin && !demoMode) ? 'opacity-75 grayscale' : ''}`}>
                 <h3 className="font-bold text-gray-700 mb-3 text-sm uppercase tracking-wide border-b pb-1">2. Completa il tuo ordine</h3>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
@@ -824,8 +943,8 @@ const App = () => {
                      <label className={`block text-xs font-bold uppercase mb-2 ${errors.water ? 'text-red-600' : 'text-gray-500'}`}>Scelta Acqua *</label>
                      <div className="flex gap-2 h-20">
                         {['Nessuna', 'Naturale', 'Frizzante'].map(opt => (
-                           <div key={opt} className={`flex-1 ${orderStatus === 'sent' || (isEverythingClosed && !user.isAdmin) ? 'pointer-events-none' : ''}`} onClick={() => {
-                             if(orderStatus !== 'sent' && (!isEverythingClosed || user.isAdmin)) {
+                           <div key={opt} className={`flex-1 ${orderStatus === 'sent' || (isBookingClosed && !user.isAdmin && !demoMode) ? 'pointer-events-none' : ''}`} onClick={() => {
+                             if(orderStatus !== 'sent' && (!isBookingClosed || user.isAdmin || demoMode)) {
                                setSelectedWater(opt);
                                if(errors.water) setErrors(prev => ({...prev, water: false}));
                              }
@@ -842,7 +961,7 @@ const App = () => {
                         {['bar', 'asporto'].map(choice => (
                           <button 
                             key={choice}
-                            disabled={orderStatus === 'sent' || (isEverythingClosed && !user.isAdmin)}
+                            disabled={orderStatus === 'sent' || (isBookingClosed && !user.isAdmin && !demoMode)}
                             onClick={() => {
                               setDiningChoice(choice);
                               if(errors.dining) setErrors(prev => ({...prev, dining: false}));
@@ -867,7 +986,7 @@ const App = () => {
                         <span className="text-green-800 font-bold text-lg">🔒 Ordine Inviato</span>
                         <p className="text-green-700 text-xs">Non è più possibile modificare le scelte.</p>
                       </div>
-                   ) : isEverythingClosed && !user.isAdmin ? (
+                   ) : isBookingClosed && !user.isAdmin && !demoMode ? (
                       <div className="bg-red-100 p-3 rounded-lg text-center border border-red-300">
                         <span className="text-red-800 font-bold text-lg">🛑 Ordini Chiusi</span>
                         <p className="text-red-700 text-xs">Le prenotazioni chiudono alle 12:00.</p>
@@ -889,7 +1008,7 @@ const App = () => {
                         <span>{user.isAdmin && actingAsUser.id !== user.id ? `📨 Ordina per ${actingAsUser.name.split(' ')[0]}` : '📨 Salva la tua scelta'}</span>
                       </button>
                     )}
-                    {message && orderStatus !== 'sent' && !(isEverythingClosed && !user.isAdmin) && <p className={`text-center font-bold mt-2 text-sm animate-pulse ${message.includes('Errore') || message.includes('evidenziati') ? 'text-red-600' : 'text-green-600'}`}>{message}</p>}
+                    {message && orderStatus !== 'sent' && !(isBookingClosed && !user.isAdmin && !demoMode) && <p className={`text-center font-bold mt-2 text-sm animate-pulse ${message.includes('Errore') || message.includes('evidenziati') ? 'text-red-600' : 'text-green-600'}`}>{message}</p>}
                 </div>
               </div>
             </div>
@@ -906,7 +1025,7 @@ const App = () => {
               {orderStatus === 'sent' ? (
                  <div className="text-center p-4 bg-white rounded border border-green-200">
                     <div className="text-4xl mb-2">✅</div>
-                    <p className="text-green-800 font-bold">Email Inviata</p>
+                    <p className="text-green-800 font-bold">Email Inviata da {orderAuthor || 'un collega'}</p>
                     <p className="text-xs text-gray-500">L'ordine è chiuso.</p>
                     {user.isAdmin && (
                         <button onClick={unlockOrder} className="mt-3 text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-1 rounded border border-gray-400">
@@ -917,7 +1036,7 @@ const App = () => {
               ) : (
                 <div className="space-y-4">
                   {/* FASE 1 */}
-                  {isEverythingClosed && !user.isAdmin ? (
+                  {isEmailClosed && !user.isAdmin && !demoMode ? (
                       <div className="bg-red-50 border border-red-200 p-4 rounded text-center">
                           <p className="text-red-600 font-bold mb-2">⛔ Tempo Email Scaduto</p>
                           <p className="text-xs text-gray-600">Non è più possibile inviare l'email (12:00+). Chiama il bar.</p>
@@ -939,7 +1058,7 @@ const App = () => {
                   )}
 
                   {/* FASE 2 */}
-                  {(!isEverythingClosed || user.isAdmin) && (
+                  {(!isEmailClosed || user.isAdmin || demoMode) && (
                     <div className="relative border-l-2 border-green-400 pl-4 ml-2">
                         <div className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-green-500 border-2 border-white"></div>
                         <h4 className="text-sm font-bold text-green-800 mb-1">Fase 2: Conferma nel sistema</h4>
