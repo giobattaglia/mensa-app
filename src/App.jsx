@@ -17,6 +17,10 @@ const firebaseConfig = {
 const appId = 'mensa-app-v1'; 
 const initialAuthToken = null;
 
+// Percorsi Firestore
+const PUBLIC_ORDERS_COLLECTION = `artifacts/${appId}/public/data/mealOrders`;
+const CONFIG_DOC_PATH = `artifacts/${appId}/public/data/config`; 
+
 // --- CONFIGURAZIONI UTENTE ---
 // IMPORTANTE: Aggiorna le email con quelle reali dei tuoi colleghi
 const COLLEAGUES = [
@@ -24,7 +28,7 @@ const COLLEAGUES = [
   { id: 'u2', name: 'Chiara Italiani', email: 'c_italiani@comune.formigine.mo.it', pin: '2222', isAdmin: false },
   { id: 'u3', name: 'Davide Cremaschi', email: 'd.cremaschi@comune.formigine.mo.it', pin: '3333', isAdmin: false },
   { id: 'u4', name: 'Federica Fontana', email: 'f.fontana@comune.formigine.mo.it', pin: '4444', isAdmin: false },
-  { id: 'u5', name: 'Gioacchino Battaglia', email: 'gioacchino.battaglia@comune.formigine.mo.it', pin: '5555', isAdmin: true },
+  { id: 'u5', name: 'Gioacchino Battaglia', email: 'gioacchino.battaglia@comune.formigine.mo.it', pin: '7378', isAdmin: true },
   { id: 'u6', name: 'Giuseppe Carteri', email: 'g.carteri@comune.formigine.mo.it', pin: '6666', isAdmin: false },
   { id: 'u7', name: 'Andrea Vescogni', email: 'andrea.vescogni@comune.formigine.mo.it', pin: '7777', isAdmin: false },
   { id: 'u8', name: 'Patrizia Caselli', email: 'patrizia.caselli@comune.formigine.mo.it', pin: '8888', isAdmin: false },
@@ -203,8 +207,6 @@ const LoginScreen = ({ onLogin }) => {
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
 
-  const userHint = COLLEAGUES.find(c => c.id === selectedColleague);
-
   const handleLogin = () => {
     if (!selectedColleague) {
       setError('Seleziona il tuo nome dalla lista.');
@@ -252,11 +254,6 @@ const LoginScreen = ({ onLogin }) => {
               className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 outline-none text-center tracking-[0.5em] text-2xl font-bold"
               placeholder="••••"
             />
-            {userHint && (
-              <p className="text-xs text-gray-400 mt-2 text-center bg-gray-50 p-1 rounded border border-dashed border-gray-300">
-                💡 PIN di prova: <strong>{userHint.pin}</strong>
-              </p>
-            )}
           </div>
 
           {error && (
