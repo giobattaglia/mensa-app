@@ -3,7 +3,7 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, updateProfile, signOut } from 'firebase/auth';
 import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, query, where, arrayUnion, updateDoc, writeBatch, deleteDoc } from 'firebase/firestore';
 
-// --- CONFIGURAZIONE FIREBASE GLOBALE ---
+// --- CONFIGURAZIONE FIREBASE GLOBALE (TUA) ---
 const firebaseConfig = {
   apiKey: "AIzaSyALMoiyVGzHEesU6L5ax2T7Iovg_Zs6kwA",
   authDomain: "mensa-ufficio-2025.firebaseapp.com",
@@ -12,6 +12,10 @@ const firebaseConfig = {
   messagingSenderId: "792389436556",
   appId: "1:792389436556:web:47cf9c9636ff2d801ee7a9"
 };
+
+// --- AGGIUNGI QUESTE DUE RIGHE SOTTO LA CONFIGURAZIONE ---
+const appId = 'mensa-app-v1'; 
+const initialAuthToken = null;
 
 // Percorsi Firestore
 const PUBLIC_ORDERS_COLLECTION = `artifacts/${appId}/public/data/mealOrders`;
