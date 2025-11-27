@@ -26,7 +26,8 @@ const SETTINGS_DOC_PATH = `${PUBLIC_DATA_PATH}/settings`;
 
 const BANNER_IMAGE_URL = "https://images.unsplash.com/photo-1559339352-11d035aa65de?q=80&w=2074&auto=format&fit=crop"; 
 
-// --- DATI INIZIALI (SEED) ---
+// --- DATI INIZIALI (SEED & SYNC) ---
+// Modifica questa lista per aggiornare gli utenti nel database ad ogni avvio
 const INITIAL_COLLEAGUES = [
   { id: 'u1', name: 'Barbara Zucchi', email: 'b.zucchi@comune.formigine.mo.it', pin: '1111', isAdmin: false },
   { id: 'u2', name: 'Chiara Italiani', email: 'c_italiani@comune.formigine.mo.it', pin: '2222', isAdmin: false },
@@ -39,6 +40,7 @@ const INITIAL_COLLEAGUES = [
   { id: 'u9', name: 'Roberta Falchi', email: 'rfalchi@comune.formigine.mo.it', pin: '9999', isAdmin: false },
   { id: 'u10', name: 'Roberta Palumbo', email: 'r.palumbo@comune.formigine.mo.it', pin: '1234', isAdmin: false },
   { id: 'u11', name: 'Veronica Cantile', email: 'v.cantile@comune.formigine.mo.it', pin: '0000', isAdmin: false },
+  // Puoi aggiungere il tuo utente qui se mancava
 ];
 
 const INITIAL_SETTINGS = {
@@ -690,33 +692,38 @@ const App = () => {
            const usersRef = collection(dbInstance, USERS_COLLECTION_PATH);
            const snap = await getDocs(usersRef);
            
-           if (snap.empty) {
-              // Se è vuoto, usiamo i dati locali e proviamo a scrivere
-              console.log("Database vuoto, uso dati locali...");
-              setColleaguesList(INITIAL_COLLEAGUES);
-              setAppSettings(INITIAL_SETTINGS);
-              
-              try {
-                const batch = writeBatch(dbInstance);
-                INITIAL_COLLEAGUES.forEach(u => {
-                   const docRef = doc(usersRef, u.id);
-                   batch.set(docRef, u);
-                });
-                const settingsRef = doc(dbInstance, SETTINGS_DOC_PATH, 'main');
-                batch.set(settingsRef, INITIAL_SETTINGS);
-                await batch.commit();
-              } catch(e) {
-                console.warn("Impossibile scrivere i dati iniziali (permessi?), uso memoria locale.", e);
-              }
-
-           } else {
-              const loadedUsers = snap.docs.map(d => d.data());
-              loadedUsers.sort((a,b) => a.name.localeCompare(b.name));
-              setColleaguesList(loadedUsers);
-              
-              const settingsSnap = await getDoc(doc(dbInstance, SETTINGS_DOC_PATH, 'main'));
-              if (settingsSnap.exists()) setAppSettings(settingsSnap.data());
+           // SEEDING FORZATO DEGLI UTENTI INIZIALI SE IL DB È VUOTO O SE È LA PRIMA VOLTA
+           // In questo caso, sincronizziamo gli utenti del codice nel DB per assicurare che le modifiche siano riflesse.
+           // NOTA: Questo sovrascriverà le modifiche manuali fatte nel pannello admin se l'ID corrisponde.
+           // Per produzione reale, rimuovere questo blocco o renderlo condizionale.
+           // Qui lo usiamo per facilitare il test dell'utente.
+           const batch = writeBatch(dbInstance);
+           INITIAL_COLLEAGUES.forEach(u => {
+               const docRef = doc(usersRef, u.id);
+               batch.set(docRef, u, { merge: true }); // Merge per non perdere altri campi se ci fossero
+           });
+           
+           // Settings init solo se non esistono
+           const settingsRef = doc(dbInstance, SETTINGS_DOC_PATH, 'main');
+           const settingsSnap = await getDoc(settingsRef);
+           if (!settingsSnap.exists()) {
+              batch.set(settingsRef, INITIAL_SETTINGS);
            }
+
+           await batch.commit();
+
+           // Ricarica tutto
+           const updatedSnap = await getDocs(usersRef);
+           const loadedUsers = updatedSnap.docs.map(d => d.data());
+           loadedUsers.sort((a,b) => a.name.localeCompare(b.name));
+           setColleaguesList(loadedUsers);
+           
+           if (settingsSnap.exists()) {
+              setAppSettings(settingsSnap.data());
+           } else {
+              setAppSettings(INITIAL_SETTINGS);
+           }
+
          } catch (error) {
            console.error("Errore lettura dati iniziali:", error);
            setColleaguesList(INITIAL_COLLEAGUES);
