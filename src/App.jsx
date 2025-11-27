@@ -212,7 +212,7 @@ const WaterIcon = ({ type, selected, hasError }) => {
 };
 
 // --- SCHERMATA LOGIN ---
-const LoginScreen = ({ onLogin, onEnableDemo }) => {
+const LoginScreen = ({ onLogin, demoMode, onToggleDemo }) => {
   const [selectedColleague, setSelectedColleague] = useState('');
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
@@ -283,10 +283,15 @@ const LoginScreen = ({ onLogin, onEnableDemo }) => {
         {/* PULSANTE DEMO IN LOGIN */}
         <div className="mt-8 pt-4 border-t flex justify-center">
            <button 
-             onClick={onEnableDemo}
-             className="text-xs text-purple-500 hover:text-purple-700 font-semibold flex items-center gap-1 bg-purple-50 px-3 py-1 rounded-full"
+             onClick={onToggleDemo}
+             className={`text-xs font-semibold flex items-center gap-2 px-4 py-2 rounded-full transition-all shadow-sm ${
+               demoMode 
+                 ? 'bg-purple-600 text-white hover:bg-purple-700 border border-purple-700' 
+                 : 'bg-purple-50 text-purple-600 hover:bg-purple-100 border border-purple-200'
+             }`}
            >
-             <span>🧪</span> Attiva Modalità DEMO (Test)
+             <span>{demoMode ? '✅' : '🧪'}</span> 
+             {demoMode ? 'Modalità DEMO Attiva (Disattiva)' : 'Attiva Modalità DEMO (Test)'}
            </button>
         </div>
       </div>
@@ -754,7 +759,7 @@ const App = () => {
   if (loading) return <div className="min-h-screen flex items-center justify-center"><LoadingSpinner /></div>;
 
   if (!isShopOpen && !demoMode) return <ClosedScreen nextDate={getNextOpenDay(todayStr)} onEnableDemo={() => { setDemoMode(true); setIsShopOpen(true); }} />;
-  if (!user) return <LoginScreen onLogin={handleLogin} onEnableDemo={() => { setDemoMode(true); setIsShopOpen(true); }} />;
+  if (!user) return <LoginScreen onLogin={handleLogin} demoMode={demoMode} onToggleDemo={() => setDemoMode(prev => !prev)} />;
 
   // Separazione ordini per visualizzazione
   const barOrders = orders.filter(o => !o.isTakeout);
@@ -784,7 +789,6 @@ const App = () => {
         
         {/* TOP BAR */}
         <div className="absolute top-4 right-4 z-50 flex gap-2">
-          {/* Removed the small "Esci Demo" button here since it's in the banner now */}
           {user.isAdmin && (
             <>
               <button onClick={() => setShowAdminCal(true)} className="bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold px-3 py-1 rounded-full shadow border border-orange-400">
