@@ -26,8 +26,12 @@ const SETTINGS_DOC_PATH = `${PUBLIC_DATA_PATH}/settings`;
 
 const BANNER_IMAGE_URL = "https://images.unsplash.com/photo-1559339352-11d035aa65de?q=80&w=2074&auto=format&fit=crop"; 
 
-// --- DATI INIZIALI PER IL RESET ---
-// Usati SOLO quando premi "RIPRISTINA DB".
+// --- PASSWORD DI SICUREZZA PER IL RESET DEL DATABASE ---
+const DB_RESET_PASSWORD = "admin"; 
+
+// --- DATI INIZIALI (SEED) ---
+// Usati SOLO se premi "RIPRISTINA DB".
+// Crea solo l'admin principale per permetterti di entrare e configurare gli altri.
 const INITIAL_COLLEAGUES = [
   { 
     id: 'u_admin_master', 
@@ -245,11 +249,10 @@ const LoginScreen = ({ onLogin, demoMode, onToggleDemo, colleagues = [], onReset
   };
   
   const handleResetClick = () => {
-      const pwd = prompt("Inserisci la password per resettare il database:");
-      if (pwd === "admin") {
+      const pwd = prompt("ATTENZIONE: Stai per cancellare tutto il database e ripristinare solo l'utente Admin iniziale. Inserisci password:");
+      if (pwd === DB_RESET_PASSWORD) {
           onResetDB();
       } else {
-          // Se annulla o sbaglia password, non fa nulla
           if(pwd) alert("Password errata!");
       }
   };
@@ -420,7 +423,7 @@ const AdminHistory = ({ db, onClose }) => {
 };
 
 // --- COMPONENTE ADMIN: PANNELLO COMPLETO (Calendario, Utenti, Settings) ---
-const AdminPanel = ({ db, currentDay, onClose, initialColleagues, onUsersUpdate }) => {
+const AdminPanel = ({ db, currentDay, onClose, onUsersUpdate }) => {
   const [activeTab, setActiveTab] = useState('calendar'); // 'calendar', 'users', 'settings'
   const [blockedDates, setBlockedDates] = useState([]);
   const [users, setUsers] = useState([]);
@@ -483,7 +486,7 @@ const AdminPanel = ({ db, currentDay, onClose, initialColleagues, onUsersUpdate 
       setNewUser({ name: '', email: '', pin: '', isAdmin: false });
       setSaveMsg('✅ Utente salvato!');
       setTimeout(() => setSaveMsg(''), 2000);
-      onUsersUpdate(); // Notifica app principale per ricaricare lista
+      // Non serve reloadData qui perché il listener in App lo farà
     } catch (e) {
       console.error(e);
       setSaveMsg('❌ Errore salvataggio');
@@ -495,7 +498,6 @@ const AdminPanel = ({ db, currentDay, onClose, initialColleagues, onUsersUpdate 
     try {
       await deleteDoc(doc(db, USERS_COLLECTION_PATH, id));
       setUsers(users.filter(u => u.id !== id));
-      onUsersUpdate();
     } catch (e) { console.error(e); alert("Errore eliminazione"); }
   };
 
@@ -505,7 +507,6 @@ const AdminPanel = ({ db, currentDay, onClose, initialColleagues, onUsersUpdate 
        await setDoc(doc(db, USERS_COLLECTION_PATH, editingUser.id), editingUser, {merge: true});
        setUsers(users.map(u => u.id === editingUser.id ? editingUser : u));
        setEditingUser(null);
-       onUsersUpdate();
      } catch (e) { console.error(e); alert("Errore modifica"); }
   };
 
@@ -514,7 +515,6 @@ const AdminPanel = ({ db, currentDay, onClose, initialColleagues, onUsersUpdate 
     try {
       await setDoc(doc(db, SETTINGS_DOC_PATH, 'main'), settings, { merge: true });
       alert("Impostazioni salvate!");
-      onUsersUpdate(); // Reload generale
     } catch (e) { console.error(e); alert("Errore impostazioni"); }
   };
 
@@ -654,7 +654,7 @@ const App = () => {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
   const [showHelp, setShowHelp] = useState(false); 
-  const [showAdminPanel, setShowAdminPanel] = useState(false); // Changed from showAdminCal
+  const [showAdminPanel, setShowAdminPanel] = useState(false); 
   const [showHistory, setShowHistory] = useState(false); 
 
   const todayDate = new Date();
@@ -678,37 +678,18 @@ const App = () => {
   const isBookingClosed = hour >= 12;
   const isEmailClosed = hour >= 13;
 
-  // RELOAD TRIGGER
-  const reloadData = async () => {
-     if(!db) return;
-     // Ricarica utenti
-     const usersSnap = await getDocs(collection(db, USERS_COLLECTION_PATH));
-     if (!usersSnap.empty) {
-        const loadedUsers = usersSnap.docs.map(d => d.data());
-        loadedUsers.sort((a,b) => a.name.localeCompare(b.name));
-        setColleaguesList(loadedUsers);
-     }
-     // Ricarica settings
-     const settingsSnap = await getDoc(doc(db, SETTINGS_DOC_PATH, 'main'));
-     if (settingsSnap.exists()) {
-        setAppSettings(settingsSnap.data());
-     }
-  };
-
   // FORZATURA MANUALE (DEFINITA PRIMA DELL'USO)
   const forceStart = () => {
     setInitTimeout(true);
   };
 
   const handleHardReset = async () => {
-      if(!confirm("ATTENZIONE: Questo cancellerà TUTTI gli utenti e resetterà il database. Confermi?")) return;
       setLoading(true);
       try {
         // 1. Cancella collezione users
         const usersRef = collection(db, USERS_COLLECTION_PATH);
         const snap = await getDocs(usersRef);
         
-        // Firestore batch delete (max 500 ops)
         const batch = writeBatch(db);
         snap.docs.forEach(doc => {
             batch.delete(doc.ref);
@@ -734,11 +715,10 @@ const App = () => {
       }
   };
 
-  // 1. INIT FIREBASE & SEEDING
+  // 1. INIT FIREBASE & LOAD
   useEffect(() => {
     if (Object.keys(firebaseConfig).length === 0) return;
     
-    // Timeout di sicurezza
     const timeoutId = setTimeout(() => {
       setInitTimeout(true);
     }, 7000);
@@ -750,44 +730,22 @@ const App = () => {
       setDb(dbInstance);
       setAuth(authInstance);
 
-      // Seeding iniziale
-      const checkAndSeed = async () => {
-         try {
-           const usersRef = collection(dbInstance, USERS_COLLECTION_PATH);
-           const snap = await getDocs(usersRef);
-           
-           if (snap.empty) {
-              console.log("Database vuoto, uso dati locali...");
-              setColleaguesList(INITIAL_COLLEAGUES);
-              setAppSettings(INITIAL_SETTINGS);
-              
-              try {
-                const batch = writeBatch(dbInstance);
-                INITIAL_COLLEAGUES.forEach(u => {
-                   const docRef = doc(usersRef, u.id);
-                   batch.set(docRef, u);
-                });
-                const settingsRef = doc(dbInstance, SETTINGS_DOC_PATH, 'main');
-                batch.set(settingsRef, INITIAL_SETTINGS);
-                await batch.commit();
-              } catch(e) {
-                console.warn("Impossibile scrivere i dati iniziali (permessi?), uso memoria locale.", e);
-              }
+      // Listener in tempo reale per utenti e settings
+      const subscribeToData = () => {
+         // Users
+         const unsubUsers = onSnapshot(collection(dbInstance, USERS_COLLECTION_PATH), (snap) => {
+            const loadedUsers = snap.docs.map(d => d.data());
+            loadedUsers.sort((a,b) => a.name.localeCompare(b.name));
+            setColleaguesList(loadedUsers);
+            setDataLoaded(true);
+         });
 
-           } else {
-              const loadedUsers = snap.docs.map(d => d.data());
-              loadedUsers.sort((a,b) => a.name.localeCompare(b.name));
-              setColleaguesList(loadedUsers);
-              
-              const settingsSnap = await getDoc(doc(dbInstance, SETTINGS_DOC_PATH, 'main'));
-              if (settingsSnap.exists()) setAppSettings(settingsSnap.data());
-           }
-         } catch (error) {
-           console.error("Errore lettura dati iniziali:", error);
-           setColleaguesList(INITIAL_COLLEAGUES);
-           setAppSettings(INITIAL_SETTINGS);
-         }
-         setDataLoaded(true);
+         // Settings
+         const unsubSettings = onSnapshot(doc(dbInstance, SETTINGS_DOC_PATH, 'main'), (snap) => {
+            if (snap.exists()) setAppSettings(snap.data());
+         });
+         
+         return () => { unsubUsers(); unsubSettings(); };
       };
 
       const checkDateAccess = async () => {
@@ -823,9 +781,10 @@ const App = () => {
         }
       };
 
-      initAuth().then(async () => {
-        await checkAndSeed();
-        await checkDateAccess();
+      // Sequenza di avvio
+      initAuth().then(() => {
+        subscribeToData();
+        checkDateAccess();
       });
 
       onAuthStateChanged(authInstance, (u) => {
@@ -835,6 +794,9 @@ const App = () => {
           clearTimeout(timeoutId);
         }
       });
+
+      return () => { /* cleanup listeners */ };
+
     } catch (e) { 
       console.error("Errore init:", e); 
       setLoading(false);
@@ -858,7 +820,7 @@ const App = () => {
 
   // Restore user session
   useEffect(() => {
-      if (dataLoaded && isAuthReady) {
+      if (dataLoaded && isAuthReady && !user) {
           const savedUserId = sessionStorage.getItem('mealAppUser');
           if (savedUserId) {
             const found = colleaguesList.find(c => c.id === savedUserId);
@@ -1150,7 +1112,7 @@ const App = () => {
 
         {/* MODALI */}
         {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
-        {showAdminPanel && <AdminPanel db={db} currentDay={todayStr} onClose={() => setShowAdminPanel(false)} initialColleagues={colleaguesList} onUsersUpdate={reloadData} />}
+        {showAdminPanel && <AdminPanel db={db} currentDay={todayStr} onClose={() => setShowAdminPanel(false)} />}
         {showHistory && <AdminHistory db={db} onClose={() => setShowHistory(false)} />}
 
         {/* BANNER */}
