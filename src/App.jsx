@@ -212,7 +212,7 @@ const WaterIcon = ({ type, selected, hasError }) => {
 };
 
 // --- SCHERMATA LOGIN ---
-const LoginScreen = ({ onLogin }) => {
+const LoginScreen = ({ onLogin, onEnableDemo }) => {
   const [selectedColleague, setSelectedColleague] = useState('');
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
@@ -233,7 +233,7 @@ const LoginScreen = ({ onLogin }) => {
 
   return (
     <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
-      <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border-t-8 border-green-700">
+      <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border-t-8 border-green-700 relative">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-extrabold text-green-800 mb-2 font-serif">7 MILA CAFFÈ</h1>
           <p className="text-gray-500 text-sm">Accesso Riservato</p>
@@ -278,6 +278,16 @@ const LoginScreen = ({ onLogin }) => {
           >
             ACCEDI
           </button>
+        </div>
+
+        {/* PULSANTE DEMO IN LOGIN */}
+        <div className="mt-8 pt-4 border-t flex justify-center">
+           <button 
+             onClick={onEnableDemo}
+             className="text-xs text-purple-500 hover:text-purple-700 font-semibold flex items-center gap-1 bg-purple-50 px-3 py-1 rounded-full"
+           >
+             <span>🧪</span> Attiva Modalità DEMO (Test)
+           </button>
         </div>
       </div>
     </div>
@@ -744,7 +754,7 @@ const App = () => {
   if (loading) return <div className="min-h-screen flex items-center justify-center"><LoadingSpinner /></div>;
 
   if (!isShopOpen && !demoMode) return <ClosedScreen nextDate={getNextOpenDay(todayStr)} onEnableDemo={() => { setDemoMode(true); setIsShopOpen(true); }} />;
-  if (!user) return <LoginScreen onLogin={handleLogin} />;
+  if (!user) return <LoginScreen onLogin={handleLogin} onEnableDemo={() => { setDemoMode(true); setIsShopOpen(true); }} />;
 
   // Separazione ordini per visualizzazione
   const barOrders = orders.filter(o => !o.isTakeout);
