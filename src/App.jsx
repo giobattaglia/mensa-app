@@ -28,7 +28,6 @@ const BANNER_IMAGE_URL = "https://images.unsplash.com/photo-1559339352-11d035aa6
 
 // --- DATI INIZIALI PER IL RESET ---
 // Usati SOLO quando premi "RIPRISTINA DB".
-// Ho messo GIOACCHINO come unico utente iniziale.
 const INITIAL_COLLEAGUES = [
   { 
     id: 'u_admin_master', 
@@ -251,6 +250,7 @@ const LoginScreen = ({ onLogin, demoMode, onToggleDemo, colleagues = [], onReset
           onResetDB();
       } else {
           // Se annulla o sbaglia password, non fa nulla
+          if(pwd) alert("Password errata!");
       }
   };
 
@@ -701,30 +701,35 @@ const App = () => {
   };
 
   const handleHardReset = async () => {
-      if(!confirm("ATTENZIONE: Questo cancellerà tutti gli utenti attuali nel database e li sostituirà con la lista scritta nel codice. Confermi?")) return;
+      if(!confirm("ATTENZIONE: Questo cancellerà TUTTI gli utenti e resetterà il database. Confermi?")) return;
       setLoading(true);
       try {
+        // 1. Cancella collezione users
         const usersRef = collection(db, USERS_COLLECTION_PATH);
         const snap = await getDocs(usersRef);
+        
+        // Firestore batch delete (max 500 ops)
         const batch = writeBatch(db);
-
-        // 1. Delete existing
         snap.docs.forEach(doc => {
             batch.delete(doc.ref);
         });
-
-        // 2. Add from code
+        
+        // 2. Inserisci solo Admin Iniziale
         INITIAL_COLLEAGUES.forEach(u => {
             const docRef = doc(usersRef, u.id);
             batch.set(docRef, u);
         });
+        
+        // 3. Reset settings
+        const settingsRef = doc(db, SETTINGS_DOC_PATH, 'main');
+        batch.set(settingsRef, INITIAL_SETTINGS);
 
         await batch.commit();
         alert("Database resettato con successo! Ricarica la pagina.");
         window.location.reload();
       } catch (e) {
         console.error(e);
-        alert(`Errore durante il reset: ${e.message}`); // Mostra errore specifico
+        alert(`Errore durante il reset: ${e.message}`);
         setLoading(false);
       }
   };
@@ -752,7 +757,6 @@ const App = () => {
            const snap = await getDocs(usersRef);
            
            if (snap.empty) {
-              // Se è vuoto, usiamo i dati locali e proviamo a scrivere
               console.log("Database vuoto, uso dati locali...");
               setColleaguesList(INITIAL_COLLEAGUES);
               setAppSettings(INITIAL_SETTINGS);
