@@ -38,7 +38,7 @@ const COLLEAGUES = [
 
 const BANNER_IMAGE_URL = "https://images.unsplash.com/photo-1559339352-11d035aa65de?q=80&w=2074&auto=format&fit=crop"; 
 const EMAIL_BAR = "gioacchino.battaglia@comune.formigine.mo.it"; 
-const PHONE_BAR = "0598751381"; // Numero del bar per chiamate rapide
+const PHONE_BAR = "0598751381";
 
 // --- UTILITÀ CALENDARIO ---
 const formatDate = (date) => date.toISOString().split('T')[0];
@@ -126,21 +126,23 @@ const HelpModal = ({ onClose }) => (
         </div>
 
         <div className="bg-red-50 p-4 rounded-lg border border-red-200">
-          <h3 className="font-bold text-red-800 border-b border-red-300 pb-1 mb-2">2. Invio Ordine (Ore 10:30)</h3>
+          <h3 className="font-bold text-red-800 border-b border-red-300 pb-1 mb-2">2. Invio Ordine (Entro le 12:00)</h3>
           <ul className="list-disc pl-5 space-y-2 text-sm text-red-700">
-            <li>Alle 10:30 apparirà un avviso rosso lampeggiante.</li>
-            <li><strong>CHIUNQUE</strong> (Admin o Collega) può inviare l'email se l'Admin non c'è.</li>
-            <li>Clicca su <strong>"Apri Gmail"</strong> (o App Email su cellulare).</li>
+            <li>Dalle 10:30 appare l'avviso. Alle <strong>12:00 STOP ORDINI</strong>.</li>
+            <li><strong>CHIUNQUE</strong> può inviare l'email se l'Admin non c'è.</li>
+            <li>Clicca su <strong>"Gmail Web"</strong> (da PC) o <strong>"App Email"</strong> (da Cellulare).</li>
             <li>Premi invia nella tua mail.</li>
             <li>Torna qui e clicca <strong>"CONFERMA INVIO"</strong> per bloccare l'ordine.</li>
           </ul>
         </div>
         
-        <div className="bg-gray-100 p-4 rounded-lg border border-gray-300">
-          <h3 className="font-bold text-gray-800 border-b border-gray-300 pb-1 mb-2">3. Dopo le 13:00</h3>
-          <p className="text-sm text-gray-700">
-            Se l'ordine non è stato inviato entro le 13:00, il sistema si blocca. Bisognerà chiamare il bar telefonicamente.
-          </p>
+        <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
+          <h3 className="font-bold text-orange-800 border-b border-orange-300 pb-1 mb-2">3. Funzioni Admin</h3>
+          <ul className="list-disc pl-5 space-y-2 text-sm text-orange-700">
+            <li>Solo l'Admin (Gioacchino) vede il pulsante <strong>"Gestione"</strong>.</li>
+            <li>Serve per bloccare i giorni di ferie.</li>
+            <li>L'Admin può <strong>inserire ordini anche dopo le 12:00</strong> o sbloccare un invio errato.</li>
+          </ul>
         </div>
       </div>
 
@@ -359,10 +361,12 @@ const App = () => {
   const hour = time.getHours();
   const minute = time.getMinutes();
 
-  // 10:30 - 12:59 -> Avviso "Invia Email"
-  const isLateWarning = (hour === 10 && minute >= 30) || (hour >= 11 && hour < 13);
-  // 13:00+ -> Avviso "Troppo Tardi, Chiama"
-  const isTooLate = hour >= 13;
+  // LOGICA ORARIA
+  // Warning (Giallo/Rosso): Dalle 10:30 fino alle 11:59
+  const isLateWarning = (hour === 10 && minute >= 30) || (hour === 11);
+  
+  // Hard Stop (Rosso/Blocco): Dalle 12:00 in poi
+  const isTooLate = hour >= 12;
 
   // 1. INIT FIREBASE & DATE CHECK
   useEffect(() => {
@@ -463,8 +467,9 @@ const App = () => {
   };
 
   const placeOrder = async () => {
+    // BLOCCO UTENTI NORMALI DOPO LE 12:00 (Admin può proseguire)
     if (orderStatus === 'sent') { alert("Ordine già inviato al bar! Non puoi modificare."); return; }
-    if (isTooLate) { alert("Troppo tardi! Sono passate le 13:00."); return; }
+    if (isTooLate && !user.isAdmin) { alert("Troppo tardi! Sono passate le 12:00. Solo l'admin può modificare."); return; }
 
     const newErrors = {};
     let hasError = false;
@@ -683,7 +688,7 @@ const App = () => {
             </div>
         </div>
 
-        {/* --- ALERT INVIO TARDIVO PER TUTTI (10:30 - 13:00) --- */}
+        {/* --- ALERT INVIO TARDIVO (10:30 - 12:00) --- */}
         {isLateWarning && orderStatus !== 'sent' && !isTooLate && (
           <div className="bg-red-100 border-b-4 border-red-500 p-4 text-center sticky top-0 z-40 shadow-xl animate-pulse">
              <h2 className="text-red-800 font-bold text-xl uppercase mb-2">⏰ È Tardi! Chiudi l'ordine</h2>
@@ -699,14 +704,23 @@ const App = () => {
           </div>
         )}
 
-        {/* --- ALERT CRITICO DOPO LE 13:00 --- */}
+        {/* --- ALERT CRITICO (12:00+) --- */}
         {isTooLate && orderStatus !== 'sent' && (
           <div className="bg-gray-900 border-b-4 border-red-600 p-6 text-center sticky top-0 z-50 shadow-2xl">
              <h2 className="text-white font-bold text-2xl uppercase mb-2">🛑 ORDINE WEB CHIUSO</h2>
-             <p className="text-gray-300 mb-4 text-sm">Sono passate le 13:00. Non inviare più email, il bar non la leggerebbe.</p>
+             <p className="text-gray-300 mb-4 text-sm">Sono passate le 12:00. Non inviare più email, il bar non la leggerebbe.</p>
              <a href={`tel:${PHONE_BAR}`} className="inline-block bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-8 rounded-full shadow-lg text-lg animate-bounce">
                 📞 CHIAMA IL BAR: {PHONE_BAR}
              </a>
+             {user.isAdmin && (
+                <div className="mt-4 border-t border-gray-700 pt-4">
+                    <p className="text-xs text-gray-400 mb-2">Area Admin: Puoi forzare l'invio se necessario.</p>
+                    <div className="flex justify-center gap-2">
+                        <button onClick={openGmail} className="bg-gray-700 hover:bg-gray-600 text-white text-xs py-2 px-4 rounded border border-gray-500">Forza Gmail</button>
+                        <button onClick={markAsSent} className="bg-green-700 hover:bg-green-600 text-white text-xs py-2 px-4 rounded border border-green-500">Forza "Inviato"</button>
+                    </div>
+                </div>
+             )}
           </div>
         )}
 
@@ -729,14 +743,14 @@ const App = () => {
                       setDishName(e.target.value);
                       if(errors.dishName) setErrors(prev => ({...prev, dishName: false}));
                     }}
-                    disabled={orderStatus === 'sent' || isTooLate}
-                    placeholder={(orderStatus === 'sent' || isTooLate) ? "Ordine chiuso" : "Es: Insalatona pollo e noci..."}
-                    className={`w-full border-2 p-3 rounded-lg text-lg font-bold text-gray-800 outline-none transition-all placeholder:font-normal placeholder:text-gray-300 ${errors.dishName ? 'border-red-400 bg-red-50' : 'border-green-100 focus:border-green-500'} ${(orderStatus === 'sent' || isTooLate) ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''}`}
+                    disabled={orderStatus === 'sent' || (isTooLate && !user.isAdmin)}
+                    placeholder={(orderStatus === 'sent' || (isTooLate && !user.isAdmin)) ? "Ordine chiuso" : "Es: Insalatona pollo e noci..."}
+                    className={`w-full border-2 p-3 rounded-lg text-lg font-bold text-gray-800 outline-none transition-all placeholder:font-normal placeholder:text-gray-300 ${errors.dishName ? 'border-red-400 bg-red-50' : 'border-green-100 focus:border-green-500'} ${(orderStatus === 'sent' || (isTooLate && !user.isAdmin)) ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''}`}
                 />
             </div>
 
             {/* SEZIONE 2 & 3 */}
-            <div className={`bg-white border-2 border-slate-200 p-5 rounded-xl shadow-lg sticky bottom-4 z-20 ${orderStatus === 'sent' || isTooLate ? 'opacity-75 grayscale' : ''}`}>
+            <div className={`bg-white border-2 border-slate-200 p-5 rounded-xl shadow-lg sticky bottom-4 z-20 ${orderStatus === 'sent' || (isTooLate && !user.isAdmin) ? 'opacity-75 grayscale' : ''}`}>
                 <h3 className="font-bold text-gray-700 mb-3 text-sm uppercase tracking-wide border-b pb-1">2. Completa il tuo ordine</h3>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
@@ -744,8 +758,8 @@ const App = () => {
                      <label className={`block text-xs font-bold uppercase mb-2 ${errors.water ? 'text-red-600' : 'text-gray-500'}`}>Scelta Acqua *</label>
                      <div className="flex gap-2 h-20">
                         {['Nessuna', 'Naturale', 'Frizzante'].map(opt => (
-                           <div key={opt} className={`flex-1 ${orderStatus === 'sent' || isTooLate ? 'pointer-events-none' : ''}`} onClick={() => {
-                             if(orderStatus !== 'sent' && !isTooLate) {
+                           <div key={opt} className={`flex-1 ${orderStatus === 'sent' || (isTooLate && !user.isAdmin) ? 'pointer-events-none' : ''}`} onClick={() => {
+                             if(orderStatus !== 'sent' && (!isTooLate || user.isAdmin)) {
                                setSelectedWater(opt);
                                if(errors.water) setErrors(prev => ({...prev, water: false}));
                              }
@@ -762,7 +776,7 @@ const App = () => {
                         {['bar', 'asporto'].map(choice => (
                           <button 
                             key={choice}
-                            disabled={orderStatus === 'sent' || isTooLate}
+                            disabled={orderStatus === 'sent' || (isTooLate && !user.isAdmin)}
                             onClick={() => {
                               setDiningChoice(choice);
                               if(errors.dining) setErrors(prev => ({...prev, dining: false}));
@@ -787,7 +801,7 @@ const App = () => {
                         <span className="text-green-800 font-bold text-lg">🔒 Ordine Inviato</span>
                         <p className="text-green-700 text-xs">Non è più possibile modificare le scelte.</p>
                       </div>
-                   ) : isTooLate ? (
+                   ) : isTooLate && !user.isAdmin ? (
                       <div className="bg-red-100 p-3 rounded-lg text-center border border-red-300">
                         <span className="text-red-800 font-bold text-lg">🛑 Tempo Scaduto</span>
                         <p className="text-red-700 text-xs">Chiama il bar per ordinare.</p>
@@ -808,7 +822,7 @@ const App = () => {
                         <span>📨 Salva la tua scelta</span>
                       </button>
                     )}
-                    {message && orderStatus !== 'sent' && !isTooLate && <p className={`text-center font-bold mt-2 text-sm animate-pulse ${message.includes('Errore') || message.includes('evidenziati') ? 'text-red-600' : 'text-green-600'}`}>{message}</p>}
+                    {message && orderStatus !== 'sent' && !(isTooLate && !user.isAdmin) && <p className={`text-center font-bold mt-2 text-sm animate-pulse ${message.includes('Errore') || message.includes('evidenziati') ? 'text-red-600' : 'text-green-600'}`}>{message}</p>}
                 </div>
               </div>
             </div>
@@ -832,12 +846,6 @@ const App = () => {
                             🔓 Sblocca Ordine (Solo Admin)
                         </button>
                     )}
-                 </div>
-              ) : isTooLate ? (
-                 <div className="text-center p-4 bg-white rounded border border-red-200">
-                    <div className="text-4xl mb-2">🛑</div>
-                    <p className="text-red-800 font-bold">Tempo Scaduto</p>
-                    <p className="text-xs text-gray-500">Usa il telefono.</p>
                  </div>
               ) : (
                 <div className="space-y-4">
