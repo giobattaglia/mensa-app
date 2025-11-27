@@ -26,21 +26,20 @@ const SETTINGS_DOC_PATH = `${PUBLIC_DATA_PATH}/settings`;
 
 const BANNER_IMAGE_URL = "https://images.unsplash.com/photo-1559339352-11d035aa65de?q=80&w=2074&auto=format&fit=crop"; 
 
-// --- DATI INIZIALI (SEED & SYNC) ---
-// Modifica questa lista per aggiornare gli utenti nel database ad ogni avvio
+// --- DATI INIZIALI (MODIFICA QUESTA LISTA E POI PREMI IL TASTO RESET NELL'APP) ---
 const INITIAL_COLLEAGUES = [
   { id: 'u1', name: 'Barbara Zucchi', email: 'b.zucchi@comune.formigine.mo.it', pin: '1111', isAdmin: false },
   { id: 'u2', name: 'Chiara Italiani', email: 'c_italiani@comune.formigine.mo.it', pin: '2222', isAdmin: false },
   { id: 'u3', name: 'Davide Cremaschi', email: 'd.cremaschi@comune.formigine.mo.it', pin: '3333', isAdmin: false },
   { id: 'u4', name: 'Federica Fontana', email: 'f.fontana@comune.formigine.mo.it', pin: '4444', isAdmin: false },
-  { id: 'u5', name: 'Gioacchino Battaglia', email: 'gioacchino.battaglia@comune.formigine.mo.it', pin: '7378', isAdmin: true },
+  { id: 'u5', name: 'Gioacchino Battaglia', email: 'gioacchino.battaglia@comune.formigine.mo.it', pin: '7378', isAdmin: true }, // ADMIN
   { id: 'u6', name: 'Giuseppe Carteri', email: 'g.carteri@comune.formigine.mo.it', pin: '6666', isAdmin: false },
   { id: 'u7', name: 'Andrea Vescogni', email: 'andrea.vescogni@comune.formigine.mo.it', pin: '7777', isAdmin: false },
   { id: 'u8', name: 'Patrizia Caselli', email: 'patrizia.caselli@comune.formigine.mo.it', pin: '8888', isAdmin: false },
   { id: 'u9', name: 'Roberta Falchi', email: 'rfalchi@comune.formigine.mo.it', pin: '9999', isAdmin: false },
   { id: 'u10', name: 'Roberta Palumbo', email: 'r.palumbo@comune.formigine.mo.it', pin: '1234', isAdmin: false },
   { id: 'u11', name: 'Veronica Cantile', email: 'v.cantile@comune.formigine.mo.it', pin: '0000', isAdmin: false },
-  // Puoi aggiungere il tuo utente qui se mancava
+  // AGGIUNGI QUI I TUOI UTENTI SE MANCANO, POI PREMI RESET NELL'APP
 ];
 
 const INITIAL_SETTINGS = {
@@ -228,12 +227,11 @@ const WaterIcon = ({ type, selected, hasError }) => {
 };
 
 // --- SCHERMATA LOGIN ---
-const LoginScreen = ({ onLogin, demoMode, onToggleDemo, colleagues = [] }) => {
+const LoginScreen = ({ onLogin, demoMode, onToggleDemo, colleagues = [], onResetDB }) => {
   const [selectedColleague, setSelectedColleague] = useState('');
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
 
-  // Assicura che colleagues sia sempre un array
   const safeColleagues = Array.isArray(colleagues) ? colleagues : [];
 
   const handleLogin = () => {
@@ -313,8 +311,8 @@ const LoginScreen = ({ onLogin, demoMode, onToggleDemo, colleagues = [] }) => {
           </button>
         </div>
 
-        {/* PULSANTE DEMO IN LOGIN */}
-        <div className="mt-8 pt-4 border-t flex justify-center">
+        {/* PULSANTE DEMO & RESET IN LOGIN */}
+        <div className="mt-8 pt-4 border-t flex flex-col gap-2 items-center justify-center">
            <button 
              onClick={onToggleDemo}
              className={`text-xs font-semibold flex items-center gap-2 px-4 py-2 rounded-full transition-all shadow-sm ${
@@ -325,6 +323,14 @@ const LoginScreen = ({ onLogin, demoMode, onToggleDemo, colleagues = [] }) => {
            >
              <span>{demoMode ? '✅' : '🧪'}</span> 
              {demoMode ? 'Modalità DEMO Attiva (Disattiva)' : 'Attiva Modalità DEMO (Test)'}
+           </button>
+           
+           {/* NUOVO PULSANTE RESET */}
+           <button 
+             onClick={onResetDB}
+             className="text-[10px] text-red-400 hover:text-red-600 underline mt-2"
+           >
+             ⚠️ RIPRISTINA UTENTI DA CODICE
            </button>
         </div>
       </div>
@@ -670,6 +676,35 @@ const App = () => {
     setInitTimeout(true);
   };
 
+  const handleHardReset = async () => {
+      if(!confirm("ATTENZIONE: Questo cancellerà tutti gli utenti attuali nel database e li sostituirà con la lista scritta nel codice. Confermi?")) return;
+      setLoading(true);
+      try {
+        const usersRef = collection(db, USERS_COLLECTION_PATH);
+        const snap = await getDocs(usersRef);
+        const batch = writeBatch(db);
+
+        // 1. Delete existing
+        snap.docs.forEach(doc => {
+            batch.delete(doc.ref);
+        });
+
+        // 2. Add from code
+        INITIAL_COLLEAGUES.forEach(u => {
+            const docRef = doc(usersRef, u.id);
+            batch.set(docRef, u);
+        });
+
+        await batch.commit();
+        alert("Database resettato con successo! Ricarica la pagina.");
+        window.location.reload();
+      } catch (e) {
+        console.error(e);
+        alert("Errore durante il reset.");
+        setLoading(false);
+      }
+  };
+
   // 1. INIT FIREBASE & SEEDING
   useEffect(() => {
     if (Object.keys(firebaseConfig).length === 0) return;
@@ -692,38 +727,33 @@ const App = () => {
            const usersRef = collection(dbInstance, USERS_COLLECTION_PATH);
            const snap = await getDocs(usersRef);
            
-           // SEEDING FORZATO DEGLI UTENTI INIZIALI SE IL DB È VUOTO O SE È LA PRIMA VOLTA
-           // In questo caso, sincronizziamo gli utenti del codice nel DB per assicurare che le modifiche siano riflesse.
-           // NOTA: Questo sovrascriverà le modifiche manuali fatte nel pannello admin se l'ID corrisponde.
-           // Per produzione reale, rimuovere questo blocco o renderlo condizionale.
-           // Qui lo usiamo per facilitare il test dell'utente.
-           const batch = writeBatch(dbInstance);
-           INITIAL_COLLEAGUES.forEach(u => {
-               const docRef = doc(usersRef, u.id);
-               batch.set(docRef, u, { merge: true }); // Merge per non perdere altri campi se ci fossero
-           });
-           
-           // Settings init solo se non esistono
-           const settingsRef = doc(dbInstance, SETTINGS_DOC_PATH, 'main');
-           const settingsSnap = await getDoc(settingsRef);
-           if (!settingsSnap.exists()) {
-              batch.set(settingsRef, INITIAL_SETTINGS);
-           }
-
-           await batch.commit();
-
-           // Ricarica tutto
-           const updatedSnap = await getDocs(usersRef);
-           const loadedUsers = updatedSnap.docs.map(d => d.data());
-           loadedUsers.sort((a,b) => a.name.localeCompare(b.name));
-           setColleaguesList(loadedUsers);
-           
-           if (settingsSnap.exists()) {
-              setAppSettings(settingsSnap.data());
-           } else {
+           if (snap.empty) {
+              // Se è vuoto, usiamo i dati locali e proviamo a scrivere
+              console.log("Database vuoto, uso dati locali...");
+              setColleaguesList(INITIAL_COLLEAGUES);
               setAppSettings(INITIAL_SETTINGS);
-           }
+              
+              try {
+                const batch = writeBatch(dbInstance);
+                INITIAL_COLLEAGUES.forEach(u => {
+                   const docRef = doc(usersRef, u.id);
+                   batch.set(docRef, u);
+                });
+                const settingsRef = doc(dbInstance, SETTINGS_DOC_PATH, 'main');
+                batch.set(settingsRef, INITIAL_SETTINGS);
+                await batch.commit();
+              } catch(e) {
+                console.warn("Impossibile scrivere i dati iniziali (permessi?), uso memoria locale.", e);
+              }
 
+           } else {
+              const loadedUsers = snap.docs.map(d => d.data());
+              loadedUsers.sort((a,b) => a.name.localeCompare(b.name));
+              setColleaguesList(loadedUsers);
+              
+              const settingsSnap = await getDoc(doc(dbInstance, SETTINGS_DOC_PATH, 'main'));
+              if (settingsSnap.exists()) setAppSettings(settingsSnap.data());
+           }
          } catch (error) {
            console.error("Errore lettura dati iniziali:", error);
            setColleaguesList(INITIAL_COLLEAGUES);
@@ -1038,7 +1068,7 @@ const App = () => {
   if (loading || !dataLoaded) return <div className="min-h-screen flex items-center justify-center"><LoadingSpinner text="Connessione al database..." onForceStart={forceStart} /></div>;
 
   if (!isShopOpen && !demoMode) return <ClosedScreen nextDate={getNextOpenDay(todayStr)} onEnableDemo={() => { setDemoMode(true); setIsShopOpen(true); }} />;
-  if (!user) return <LoginScreen onLogin={handleLogin} demoMode={demoMode} onToggleDemo={() => setDemoMode(prev => !prev)} colleagues={colleaguesList} />;
+  if (!user) return <LoginScreen onLogin={handleLogin} demoMode={demoMode} onToggleDemo={() => setDemoMode(prev => !prev)} colleagues={colleaguesList} onResetDB={handleHardReset} />;
 
   const barOrders = orders.filter(o => !o.isTakeout);
   const takeoutOrders = orders.filter(o => o.isTakeout);
