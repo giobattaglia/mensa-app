@@ -117,7 +117,7 @@ const ClosedScreen = ({ nextDate, onEnableDemo }) => {
 };
 
 const HelpModal = ({ onClose }) => (
-  <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={onClose}>
+  <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm" onClick={onClose}>
     <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 relative" onClick={e => e.stopPropagation()}>
       <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-2xl font-bold">&times;</button>
       
@@ -315,7 +315,7 @@ const AdminHistory = ({ db, onClose }) => {
   }, [selectedDate]);
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
       <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full p-6 relative h-[80vh] flex flex-col">
         <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-2xl font-bold">&times;</button>
         <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">📜 Archivio Storico</h2>
@@ -386,7 +386,7 @@ const AdminCalendarManager = ({ db, currentDay, onClose }) => {
   const upcoming = ALLOWED_DATES_LIST.filter(d => d >= currentDay).slice(0, 10);
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
       <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 relative">
         <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-2xl font-bold">&times;</button>
         <h2 className="text-xl font-bold text-gray-800 mb-4">📅 Gestione Calendario (Admin)</h2>
@@ -726,26 +726,18 @@ const App = () => {
   };
 
   const openGmail = () => {
-    // DEMO: Manda a utente corrente. REALE: Manda al Bar.
-    const recipientEmail = demoMode ? user.email : EMAIL_BAR;
-    const subjectPrefix = demoMode ? "[TEST] " : "";
-    const subject = encodeURIComponent(`${subjectPrefix}Ordine Pranzo Ufficio - ${todayDate.toLocaleDateString('it-IT')}`);
+    const subject = encodeURIComponent(`Ordine Pranzo Ufficio - ${todayDate.toLocaleDateString('it-IT')}`);
     const body = encodeURIComponent(generateEmailText());
-    // DEMO: Niente CC. REALE: Tutti in CC.
-    const ccEmails = demoMode ? "" : getAllEmails();
-
-    const gmailLink = `https://mail.google.com/mail/?view=cm&fs=1&to=${recipientEmail}&cc=${ccEmails}&su=${subject}&body=${body}`;
+    const ccEmails = getAllEmails();
+    const gmailLink = `https://mail.google.com/mail/?view=cm&fs=1&to=${EMAIL_BAR}&cc=${ccEmails}&su=${subject}&body=${body}`;
     window.open(gmailLink, '_blank');
   };
 
   const openDefaultMail = () => {
-    const recipientEmail = demoMode ? user.email : EMAIL_BAR;
-    const subjectPrefix = demoMode ? "[TEST] " : "";
-    const subject = encodeURIComponent(`${subjectPrefix}Ordine Pranzo Ufficio - ${todayDate.toLocaleDateString('it-IT')}`);
+    const subject = encodeURIComponent(`Ordine Pranzo Ufficio - ${todayDate.toLocaleDateString('it-IT')}`);
     const body = encodeURIComponent(generateEmailText());
-    const ccEmails = demoMode ? "" : getAllEmails();
-
-    const mailtoLink = `mailto:${recipientEmail}?cc=${ccEmails}&subject=${subject}&body=${body}`;
+    const ccEmails = getAllEmails();
+    const mailtoLink = `mailto:${EMAIL_BAR}?cc=${ccEmails}&subject=${subject}&body=${body}`;
     window.location.href = mailtoLink;
   };
 
@@ -754,6 +746,7 @@ const App = () => {
   if (!isShopOpen && !demoMode) return <ClosedScreen nextDate={getNextOpenDay(todayStr)} onEnableDemo={() => { setDemoMode(true); setIsShopOpen(true); }} />;
   if (!user) return <LoginScreen onLogin={handleLogin} />;
 
+  // Separazione ordini per visualizzazione
   const barOrders = orders.filter(o => !o.isTakeout);
   const takeoutOrders = orders.filter(o => o.isTakeout);
 
@@ -1039,7 +1032,7 @@ const App = () => {
                   {isEmailClosed && !user.isAdmin && !demoMode ? (
                       <div className="bg-red-50 border border-red-200 p-4 rounded text-center">
                           <p className="text-red-600 font-bold mb-2">⛔ Tempo Email Scaduto</p>
-                          <p className="text-xs text-gray-600">Non è più possibile inviare l'email (12:00+). Chiama il bar.</p>
+                          <p className="text-xs text-gray-600">Non è più possibile inviare l'email (13:00+). Chiama il bar.</p>
                       </div>
                   ) : (
                     <div className="relative border-l-2 border-blue-400 pl-4 ml-2">
