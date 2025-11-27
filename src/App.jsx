@@ -27,7 +27,6 @@ const SETTINGS_DOC_PATH = `${PUBLIC_DATA_PATH}/settings`;
 const BANNER_IMAGE_URL = "https://images.unsplash.com/photo-1559339352-11d035aa65de?q=80&w=2074&auto=format&fit=crop"; 
 
 // --- DATI INIZIALI (SEED) ---
-// Usati solo la prima volta per popolare il database se vuoto
 const INITIAL_COLLEAGUES = [
   { id: 'u1', name: 'Barbara Zucchi', email: 'b.zucchi@comune.formigine.mo.it', pin: '1111', isAdmin: false },
   { id: 'u2', name: 'Chiara Italiani', email: 'c_italiani@comune.formigine.mo.it', pin: '2222', isAdmin: false },
@@ -232,6 +231,7 @@ const LoginScreen = ({ onLogin, demoMode, onToggleDemo, colleagues = [] }) => {
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
 
+  // Assicura che colleagues sia sempre un array
   const safeColleagues = Array.isArray(colleagues) ? colleagues : [];
 
   const handleLogin = () => {
@@ -252,8 +252,22 @@ const LoginScreen = ({ onLogin, demoMode, onToggleDemo, colleagues = [] }) => {
     <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
       <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border-t-8 border-green-700 relative">
         <div className="text-center mb-8">
+          {/* ICONA BAR VERDE */}
+          <div className="flex justify-center mb-2">
+            <div className="p-3 bg-green-50 rounded-full shadow-sm">
+             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-12 h-12 text-green-700">
+                 <path d="M12.75 12.75a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0ZM7.5 15.75a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5ZM8.25 17.25a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0ZM9.75 15.75a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5ZM10.5 17.25a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0ZM12 15.75a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5ZM12.75 17.25a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0ZM14.25 15.75a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5ZM15 17.25a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0ZM16.5 15.75a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5ZM15 12.75a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0ZM16.5 13.5a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Z" />
+                 <path fillRule="evenodd" d="M6.75 2.25A.75.75 0 0 1 7.5 3v1.5h9V3A.75.75 0 0 1 18 3v1.5h.75a3 3 0 0 1 3 3v11.25a3 3 0 0 1-3 3H5.25a3 3 0 0 1-3-3V7.5a3 3 0 0 1 3-3H6V3a.75.75 0 0 1 .75-.75Zm13.5 9a1.5 1.5 0 0 0-1.5-1.5H5.25a1.5 1.5 0 0 0-1.5 1.5v7.5a1.5 1.5 0 0 0 1.5 1.5h13.5a1.5 1.5 0 0 0 1.5-1.5v-7.5Z" clipRule="evenodd" />
+               </svg>
+            </div>
+          </div>
+
           <h1 className="text-3xl font-extrabold text-green-800 mb-2 font-serif">7 MILA CAFFÈ</h1>
-          <p className="text-gray-500 text-sm">Accesso Riservato</p>
+          <p className="text-gray-500 text-sm mb-3">Accesso Riservato</p>
+
+          <p className="text-green-700 text-xs italic border-t border-green-100 pt-4 mt-2 font-serif">
+            "Anche nel caos del lavoro,<br/>il pranzo resta un momento sacro."
+          </p>
         </div>
 
         <div className="space-y-6">
@@ -485,7 +499,7 @@ const AdminPanel = ({ db, currentDay, onClose, initialColleagues, onUsersUpdate 
         
         <div className="flex border-b">
           <button onClick={() => setActiveTab('calendar')} className={`flex-1 py-3 font-bold text-sm ${activeTab === 'calendar' ? 'border-b-2 border-orange-500 text-orange-600 bg-orange-50' : 'text-gray-500 hover:bg-gray-50'}`}>📅 CALENDARIO</button>
-          <button onClick={() => setActiveTab('users')} className={`flex-1 py-3 font-bold text-sm ${activeTab === 'users' ? 'border-b-2 border-blue-500 text-blue-600 bg-blue-50' : 'text-gray-500 hover:bg-gray-50'}`}>👥 UTENTI</button>
+          <button onClick={() => setActiveTab('users')} className={`flex-1 py-3 font-bold text-sm ${activeTab === 'users' ? 'border-b-2 border-blue-500 text-blue-600 bg-blue-50' : 'text-gray-500 hover:bg-gray-50'}`}>👥 UTENTI ({users.length})</button>
           <button onClick={() => setActiveTab('settings')} className={`flex-1 py-3 font-bold text-sm ${activeTab === 'settings' ? 'border-b-2 border-gray-500 text-gray-800 bg-gray-100' : 'text-gray-500 hover:bg-gray-50'}`}>⚙️ IMPOSTAZIONI</button>
         </div>
 
@@ -649,11 +663,16 @@ const App = () => {
      }
   };
 
+  // FORZATURA MANUALE (DEFINITA PRIMA DELL'USO)
+  const forceStart = () => {
+    setInitTimeout(true);
+  };
+
   // 1. INIT FIREBASE & SEEDING
   useEffect(() => {
     if (Object.keys(firebaseConfig).length === 0) return;
     
-    // Timeout di sicurezza: se dopo 7 secondi non ha caricato, sblocca
+    // Timeout di sicurezza
     const timeoutId = setTimeout(() => {
       setInitTimeout(true);
     }, 7000);
@@ -665,19 +684,18 @@ const App = () => {
       setDb(dbInstance);
       setAuth(authInstance);
 
-      // Seeding iniziale (se non esistono utenti, carica quelli hardcoded)
+      // Seeding iniziale
       const checkAndSeed = async () => {
          try {
            const usersRef = collection(dbInstance, USERS_COLLECTION_PATH);
            const snap = await getDocs(usersRef);
            
            if (snap.empty) {
-              // Se è vuoto, usiamo i dati locali e proviamo a scrivere (se le regole lo permettono)
+              // Se è vuoto, usiamo i dati locali e proviamo a scrivere
               console.log("Database vuoto, uso dati locali...");
               setColleaguesList(INITIAL_COLLEAGUES);
               setAppSettings(INITIAL_SETTINGS);
               
-              // Tentativo di scrittura (potrebbe fallire se le regole bloccano, ma l'app deve andare avanti)
               try {
                 const batch = writeBatch(dbInstance);
                 INITIAL_COLLEAGUES.forEach(u => {
@@ -701,7 +719,6 @@ const App = () => {
            }
          } catch (error) {
            console.error("Errore lettura dati iniziali:", error);
-           // Fallback sui dati statici in caso di errore
            setColleaguesList(INITIAL_COLLEAGUES);
            setAppSettings(INITIAL_SETTINGS);
          }
@@ -730,7 +747,6 @@ const App = () => {
           }
         } catch (e) { 
           console.error("Err date check", e);
-          // In caso di errore, assumiamo aperto se è un giorno valido
           if(isBaseValid) setIsShopOpen(true); 
         }
       };
@@ -751,7 +767,7 @@ const App = () => {
         if (u) {
           setIsAuthReady(true);
           setLoading(false);
-          clearTimeout(timeoutId); // Annulla timeout se successo
+          clearTimeout(timeoutId);
         }
       });
     } catch (e) { 
@@ -763,19 +779,19 @@ const App = () => {
     return () => clearTimeout(timeoutId);
   }, [demoMode]);
 
-  // Forzatura manuale caricamento se timeout scatta
+  // Forzatura manuale caricamento
   useEffect(() => {
     if (initTimeout && loading) {
       console.warn("Timeout caricamento: forzo avvio con dati locali.");
       setColleaguesList(INITIAL_COLLEAGUES);
       setAppSettings(INITIAL_SETTINGS);
       setDataLoaded(true);
-      setIsAuthReady(true); // Assumiamo auth ok o parziale
+      setIsAuthReady(true);
       setLoading(false);
     }
   }, [initTimeout, loading]);
 
-  // Restore user session when data is loaded
+  // Restore user session
   useEffect(() => {
       if (dataLoaded && isAuthReady) {
           const savedUserId = sessionStorage.getItem('mealAppUser');
@@ -1010,11 +1026,6 @@ const App = () => {
     const ccEmails = getAllEmails();
     const mailtoLink = `mailto:${appSettings.emailBar}?cc=${ccEmails}&subject=${subject}&body=${body}`;
     window.location.href = mailtoLink;
-  };
-
-  // Forza l'avvio manuale se lo spinner rimane troppo a lungo
-  const forceStart = () => {
-    setInitTimeout(true);
   };
 
   if (loading || !dataLoaded) return <div className="min-h-screen flex items-center justify-center"><LoadingSpinner text="Connessione al database..." onForceStart={forceStart} /></div>;
