@@ -37,7 +37,8 @@ const COLLEAGUES = [
   { id: 'u11', name: 'Veronica Cantile', email: 'v.cantile@comune.formigine.mo.it', pin: '0000', isAdmin: false },
 ];
 
-const BANNER_IMAGE_URL = "https://images.unsplash.com/photo-1498837167922-ddd27525d352?q=80&w=2070&auto=format&fit=crop"; 
+// Nuova immagine con toni verdi e stile "Bar/Menu"
+const BANNER_IMAGE_URL = "https://images.unsplash.com/photo-1559339352-11d035aa65de?q=80&w=2074&auto=format&fit=crop"; 
 // EMAIL BAR: Impostata su Gioacchino per i test
 const EMAIL_BAR = "gioacchino.battaglia@comune.formigine.mo.it"; 
 
@@ -563,10 +564,13 @@ const App = () => {
 
     text += "\n--- 👥 DETTAGLIO PER COLLEGA ---\n";
     orders.forEach(o => {
-      const waterEmoji = o.waterChoice === 'Naturale' ? '💧' : (o.waterChoice === 'Frizzante' ? '🫧' : '');
-      const diningEmoji = o.isTakeout ? '🥡' : '☕';
+      // ----------------------------------------------------
+      // AGGIORNAMENTO LOGICA EMAIL: TESTO ESPLICITO
+      // ----------------------------------------------------
+      const waterText = o.waterChoice === 'Naturale' ? ' [Acqua Nat. 💧]' : (o.waterChoice === 'Frizzante' ? ' [Acqua Friz. 🫧]' : '');
+      const diningText = o.isTakeout ? ' -> DA ASPORTO 🥡' : ' -> AL BAR ☕';
       
-      text += `- ${o.userName}: 🍽️ ${o.itemName} ${waterEmoji} ${diningEmoji}\n`;
+      text += `- ${o.userName}: 🍽️ ${o.itemName}${waterText}${diningText}\n`;
     });
     return text;
   };
