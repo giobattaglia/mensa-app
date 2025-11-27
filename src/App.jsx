@@ -26,23 +26,26 @@ const SETTINGS_DOC_PATH = `${PUBLIC_DATA_PATH}/settings`;
 
 const BANNER_IMAGE_URL = "https://images.unsplash.com/photo-1559339352-11d035aa65de?q=80&w=2074&auto=format&fit=crop"; 
 
+// --- PASSWORD DI EMERGENZA ---
+const DB_RESET_PASSWORD = "admin";
+
 // --- DATI INIZIALI (SEED) ---
-// Usati SOLO se premi "RIPRISTINA DB".
-const INITIAL_ADMIN = { 
-    id: 'u_admin_master', 
+// HO PULITO LA LISTA: ORA C'È SOLO L'ADMIN.
+// Se premi "Ripristina DB", rimarrà solo questo utente.
+const INITIAL_COLLEAGUES = [
+  { 
+    id: 'u_admin_gioacchino', 
     name: 'Gioacchino Battaglia', 
     email: 'gioacchino.battaglia@comune.formigine.mo.it', 
     pin: '7378', 
     isAdmin: true 
-};
+  }
+];
 
 const INITIAL_SETTINGS = {
   emailBar: "gioacchino.battaglia@comune.formigine.mo.it",
   phoneBar: "0598751381"
 };
-
-// --- PASSWORD DI EMERGENZA ---
-const DB_RESET_PASSWORD = "admin";
 
 // --- UTILITÀ CALENDARIO ---
 const formatDate = (date) => date.toISOString().split('T')[0];
@@ -246,7 +249,7 @@ const LoginScreen = ({ onLogin, demoMode, onToggleDemo, colleagues = [], onReset
   };
   
   const handleResetClick = () => {
-      const pwd = prompt("ATTENZIONE: Stai per cancellare TUTTI gli utenti e resettare il database allo stato iniziale. Inserisci password:");
+      const pwd = prompt("ATTENZIONE: Stai per cancellare TUTTI gli utenti e resettare il database con solo l'Admin. Inserisci password:");
       if (pwd === DB_RESET_PASSWORD) {
           onResetDB();
       } else {
@@ -420,10 +423,10 @@ const AdminHistory = ({ db, onClose }) => {
 };
 
 // --- COMPONENTE ADMIN: PANNELLO COMPLETO (Calendario, Utenti, Settings) ---
-const AdminPanel = ({ db, currentDay, onClose, initialColleagues }) => {
+const AdminPanel = ({ db, currentDay, onClose, initialColleagues, onUsersUpdate }) => {
   const [activeTab, setActiveTab] = useState('calendar'); // 'calendar', 'users', 'settings'
   const [blockedDates, setBlockedDates] = useState([]);
-  const [users, setUsers] = useState(initialColleagues || []);
+  const [users, setUsers] = useState([]);
   const [settings, setSettings] = useState({ emailBar: '', phoneBar: '' });
   
   // Stato per nuovo utente
@@ -437,7 +440,7 @@ const AdminPanel = ({ db, currentDay, onClose, initialColleagues }) => {
   useEffect(() => {
     if (!db) return;
     
-    // LISTENER REALTIME PER GLI UTENTI
+    // LISTENER REALTIME PER GLI UTENTI (MODIFICA: Corretto per aggiornamento immediato)
     const unsubUsers = onSnapshot(collection(db, USERS_COLLECTION_PATH), (snap) => {
         const loadedUsers = snap.docs.map(d => d.data());
         loadedUsers.sort((a,b) => a.name.localeCompare(b.name));
@@ -478,7 +481,7 @@ const AdminPanel = ({ db, currentDay, onClose, initialColleagues }) => {
     
     try {
       await setDoc(doc(db, USERS_COLLECTION_PATH, id), userToAdd);
-      // Non serve aggiornare lo stato 'users' manualmente, ci pensa onSnapshot
+      // Reset form
       setNewUser({ name: '', email: '', pin: '', isAdmin: false });
       setSaveMsg('✅ Utente salvato!');
       setTimeout(() => setSaveMsg(''), 2000);
@@ -670,6 +673,11 @@ const App = () => {
   const isLateWarning = (hour === 10 && minute >= 30) || (hour === 11);
   const isBookingClosed = hour >= 12;
   const isEmailClosed = hour >= 13;
+
+  // RELOAD TRIGGER (Non più strettamente necessario grazie al listener, ma mantenuto per sicurezza)
+  const reloadData = async () => {
+    // Lasciato vuoto intenzionalmente, gestito dal listener
+  };
 
   // FORZATURA MANUALE (DEFINITA PRIMA DELL'USO)
   const forceStart = () => {
