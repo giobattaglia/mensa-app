@@ -128,8 +128,8 @@ const HelpModal = ({ onClose }) => (
           <h3 className="font-bold text-red-800 border-b border-red-300 pb-1 mb-2">2. Invio Ordine (Ore 10:30)</h3>
           <ul className="list-disc pl-5 space-y-2 text-sm text-red-700">
             <li>Alle 10:30 apparirà un avviso rosso lampeggiante.</li>
-            <li><strong>CHIUNQUE</strong> (Admin o Collega) può inviare l'email.</li>
-            <li>Clicca su <strong>"Apri Gmail"</strong>: si aprirà la tua mail con tutti i colleghi in copia (CC).</li>
+            <li><strong>CHIUNQUE</strong> (Admin o Collega) può inviare l'email se l'Admin non c'è.</li>
+            <li>Clicca su <strong>"Apri Gmail"</strong>: si aprirà la tua mail con tutti i colleghi in copia (CC) e l'indirizzo del Bar.</li>
             <li>Premi invia nella tua mail.</li>
             <li>Torna qui e clicca <strong>"CONFERMA INVIO"</strong> per bloccare l'ordine.</li>
           </ul>
@@ -556,7 +556,7 @@ const App = () => {
     
     text += "--- 🍽️ RIEPILOGO CUCINA (TOTALE) ---\n";
     Object.entries(grouped).forEach(([name, count]) => {
-      text += `${count}x ${name}\n`;
+      text += `${count}x 🥗 ${name}\n`;
     });
 
     if (water['Naturale'] || water['Frizzante']) {
@@ -569,7 +569,7 @@ const App = () => {
         text += `\n=== ☕ CONSUMAZIONE AL BAR (${barOrders.length}) ===\n`;
         barOrders.forEach((o, i) => {
             const waterEmoji = o.waterChoice === 'Naturale' ? '💧' : (o.waterChoice === 'Frizzante' ? '🫧' : '');
-            text += `${i + 1}. ${o.userName}: ${o.itemName} ${waterEmoji}\n`;
+            text += `${i + 1}. ${o.userName}: 🥗 ${o.itemName} ${waterEmoji}\n`;
         });
     }
 
@@ -577,7 +577,7 @@ const App = () => {
         text += `\n=== 🥡 DA ASPORTO (${takeoutOrders.length}) ===\n`;
         takeoutOrders.forEach((o, i) => {
             const waterEmoji = o.waterChoice === 'Naturale' ? '💧' : (o.waterChoice === 'Frizzante' ? '🫧' : '');
-            text += `${i + 1}. ${o.userName}: ${o.itemName} ${waterEmoji}\n`;
+            text += `${i + 1}. ${o.userName}: 🥗 ${o.itemName} ${waterEmoji}\n`;
         });
     }
 
@@ -811,6 +811,7 @@ const App = () => {
                  </div>
               ) : (
                 <div className="space-y-4">
+                  {/* FASE 1 */}
                   <div className="relative border-l-2 border-blue-400 pl-4 ml-2">
                     <div className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-blue-500 border-2 border-white"></div>
                     <h4 className="text-sm font-bold text-blue-800 mb-1">Fase 1: Invia l'Email</h4>
@@ -825,6 +826,7 @@ const App = () => {
                     </div>
                   </div>
 
+                  {/* FASE 2 */}
                   <div className="relative border-l-2 border-green-400 pl-4 ml-2">
                     <div className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-green-500 border-2 border-white"></div>
                     <h4 className="text-sm font-bold text-green-800 mb-1">Fase 2: Conferma nel sistema</h4>
