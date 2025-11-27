@@ -22,7 +22,6 @@ const PUBLIC_ORDERS_COLLECTION = `artifacts/${appId}/public/data/mealOrders`;
 const CONFIG_DOC_PATH = `artifacts/${appId}/public/data/config`; 
 
 // --- CONFIGURAZIONI UTENTE ---
-// IMPORTANTE: Aggiorna le email con quelle reali dei tuoi colleghi
 const COLLEAGUES = [
   { id: 'u1', name: 'Barbara Zucchi', email: 'b.zucchi@comune.formigine.mo.it', pin: '1111', isAdmin: false },
   { id: 'u2', name: 'Chiara Italiani', email: 'c_italiani@comune.formigine.mo.it', pin: '2222', isAdmin: false },
@@ -37,9 +36,7 @@ const COLLEAGUES = [
   { id: 'u11', name: 'Veronica Cantile', email: 'v.cantile@comune.formigine.mo.it', pin: '0000', isAdmin: false },
 ];
 
-// Nuova immagine con toni verdi e stile "Bar/Menu"
 const BANNER_IMAGE_URL = "https://images.unsplash.com/photo-1559339352-11d035aa65de?q=80&w=2074&auto=format&fit=crop"; 
-// EMAIL BAR: Impostata su Gioacchino per i test
 const EMAIL_BAR = "gioacchino.battaglia@comune.formigine.mo.it"; 
 
 // --- UTILITÀ CALENDARIO ---
@@ -131,8 +128,8 @@ const HelpModal = ({ onClose }) => (
           <h3 className="font-bold text-red-800 border-b border-red-300 pb-1 mb-2">2. Invio Ordine (Ore 10:30)</h3>
           <ul className="list-disc pl-5 space-y-2 text-sm text-red-700">
             <li>Alle 10:30 apparirà un avviso rosso lampeggiante.</li>
-            <li><strong>CHIUNQUE</strong> (Admin o Collega) può inviare l'email se l'Admin non c'è.</li>
-            <li>Clicca su <strong>"Apri Gmail"</strong>: si aprirà la tua mail con tutti i colleghi in copia (CC) e l'indirizzo del Bar.</li>
+            <li><strong>CHIUNQUE</strong> (Admin o Collega) può inviare l'email.</li>
+            <li>Clicca su <strong>"Apri Gmail"</strong>: si aprirà la tua mail con tutti i colleghi in copia (CC).</li>
             <li>Premi invia nella tua mail.</li>
             <li>Torna qui e clicca <strong>"CONFERMA INVIO"</strong> per bloccare l'ordine.</li>
           </ul>
@@ -519,7 +516,6 @@ const App = () => {
     } catch (e) { console.error("Errore update status", e); }
   };
 
-  // NUOVA FUNZIONE DI SBLOCCO PER ADMIN
   const unlockOrder = async () => {
     if (!confirm("Vuoi davvero riaprire l'ordine? Gli utenti potranno modificare le loro scelte.")) return;
     try {
@@ -536,6 +532,11 @@ const App = () => {
   };
 
   const generateEmailText = () => {
+    // Separiamo gli ordini per tipo
+    const barOrders = orders.filter(o => !o.isTakeout);
+    const takeoutOrders = orders.filter(o => o.isTakeout);
+
+    // Statistiche generali
     const grouped = orders.reduce((acc, o) => { 
         const key = o.itemName.trim(); 
         acc[key] = (acc[key] || 0) + 1; 
@@ -544,8 +545,8 @@ const App = () => {
     const water = orders.reduce((acc, o) => { const w = o.waterChoice || 'Nessuna'; acc[w] = (acc[w] || 0) + 1; return acc; }, {});
 
     let text = `Ciao Laura,\n\n`;
-    text += `Ecco il riepilogo dell'ordine di oggi.\n`;
-    text += `Ti segnalo gentilmente che gli ordini da asporto 🥡 e da consumare al bar ☕ sono tutti per le ore 13:30.\n\n`;
+    text += `ecco il riepilogo dell'ordine di oggi ${todayDate.toLocaleDateString('it-IT')}.\n`;
+    text += `Ti segnalo gentilmente che gli ordini DA ASPORTO 🥡 e da consumare AL BAR ☕ sono tutti per le ore 13:30.\n\n`;
     text += `Grazie come sempre per la disponibilità!\nA dopo\n\n`;
 
     text += `=========================================\n`;
@@ -553,25 +554,33 @@ const App = () => {
     text += `TOTALE ORDINI: ${orders.length}\n`;
     text += `=========================================\n\n`;
     
-    text += "--- 🍽️ PIATTI ---\n";
+    text += "--- 🍽️ RIEPILOGO CUCINA (TOTALE) ---\n";
     Object.entries(grouped).forEach(([name, count]) => {
       text += `${count}x ${name}\n`;
     });
 
-    text += "\n--- 💧 ACQUA ---\n";
-    if (water['Naturale']) text += `💧 Naturale: ${water['Naturale']}\n`;
-    if (water['Frizzante']) text += `🫧 Frizzante: ${water['Frizzante']}\n`;
+    if (water['Naturale'] || water['Frizzante']) {
+        text += "\n--- 💧 RIEPILOGO ACQUA ---\n";
+        if (water['Naturale']) text += `💧 Naturale: ${water['Naturale']}\n`;
+        if (water['Frizzante']) text += `🫧 Frizzante: ${water['Frizzante']}\n`;
+    }
 
-    text += "\n--- 👥 DETTAGLIO PER COLLEGA ---\n";
-    orders.forEach(o => {
-      // ----------------------------------------------------
-      // AGGIORNAMENTO LOGICA EMAIL: TESTO ESPLICITO
-      // ----------------------------------------------------
-      const waterText = o.waterChoice === 'Naturale' ? ' [Acqua Nat. 💧]' : (o.waterChoice === 'Frizzante' ? ' [Acqua Friz. 🫧]' : '');
-      const diningText = o.isTakeout ? ' -> DA ASPORTO 🥡' : ' -> AL BAR ☕';
-      
-      text += `- ${o.userName}: 🍽️ ${o.itemName}${waterText}${diningText}\n`;
-    });
+    if (barOrders.length > 0) {
+        text += `\n=== ☕ CONSUMAZIONE AL BAR (${barOrders.length}) ===\n`;
+        barOrders.forEach((o, i) => {
+            const waterEmoji = o.waterChoice === 'Naturale' ? '💧' : (o.waterChoice === 'Frizzante' ? '🫧' : '');
+            text += `${i + 1}. ${o.userName}: ${o.itemName} ${waterEmoji}\n`;
+        });
+    }
+
+    if (takeoutOrders.length > 0) {
+        text += `\n=== 🥡 DA ASPORTO (${takeoutOrders.length}) ===\n`;
+        takeoutOrders.forEach((o, i) => {
+            const waterEmoji = o.waterChoice === 'Naturale' ? '💧' : (o.waterChoice === 'Frizzante' ? '🫧' : '');
+            text += `${i + 1}. ${o.userName}: ${o.itemName} ${waterEmoji}\n`;
+        });
+    }
+
     return text;
   };
 
@@ -593,17 +602,13 @@ const App = () => {
 
   if (loading) return <div className="min-h-screen flex items-center justify-center"><LoadingSpinner /></div>;
 
-  // --- BLOCCO GIORNO SBAGLIATO ---
-  if (!isShopOpen) {
-    return <ClosedScreen nextDate={getNextOpenDay(todayStr)} />;
-  }
+  if (!isShopOpen) return <ClosedScreen nextDate={getNextOpenDay(todayStr)} />;
+  if (!user) return <LoginScreen onLogin={handleLogin} />;
 
-  // --- LOGIN ---
-  if (!user) {
-    return <LoginScreen onLogin={handleLogin} />;
-  }
+  // Separazione ordini per visualizzazione
+  const barOrders = orders.filter(o => !o.isTakeout);
+  const takeoutOrders = orders.filter(o => o.isTakeout);
 
-  // --- APP PRINCIPALE ---
   return (
     <div className="min-h-screen bg-gray-100 font-sans p-2 sm:p-6 pb-20">
       <div className="max-w-5xl mx-auto bg-white shadow-xl rounded-2xl overflow-hidden relative">
@@ -806,7 +811,6 @@ const App = () => {
                  </div>
               ) : (
                 <div className="space-y-4">
-                  {/* FASE 1 */}
                   <div className="relative border-l-2 border-blue-400 pl-4 ml-2">
                     <div className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-blue-500 border-2 border-white"></div>
                     <h4 className="text-sm font-bold text-blue-800 mb-1">Fase 1: Invia l'Email</h4>
@@ -821,7 +825,6 @@ const App = () => {
                     </div>
                   </div>
 
-                  {/* FASE 2 */}
                   <div className="relative border-l-2 border-green-400 pl-4 ml-2">
                     <div className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-green-500 border-2 border-white"></div>
                     <h4 className="text-sm font-bold text-green-800 mb-1">Fase 2: Conferma nel sistema</h4>
@@ -836,29 +839,63 @@ const App = () => {
 
             <div className="bg-white p-4 rounded-xl shadow border h-full max-h-[600px] overflow-y-auto">
               <h3 className="font-bold text-gray-800 border-b pb-2 mb-2 flex justify-between items-center">
-                <span>👀 Ordini dei Colleghi</span>
+                <span>👀 Riepilogo Ordini</span>
                 <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{orders.length}</span>
               </h3>
               
-              <div className="space-y-3">
-                {orders.length === 0 && <p className="text-gray-400 italic text-sm text-center py-4">Nessun ordine ancora.</p>}
-                {orders.map(order => (
-                  <div key={order.userId} className={`text-sm p-3 rounded-lg border transition-all ${order.userId === user.id ? 'bg-yellow-50 border-yellow-300 shadow-sm' : 'bg-gray-50 border-gray-100 hover:border-gray-300'}`}>
-                    <div className="flex justify-between items-start mb-1">
-                      <span className="font-bold text-gray-800">{order.userName}</span>
-                      {order.isTakeout ? 
-                        <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded border border-red-200 font-bold tracking-wider">ASPORTO</span> : 
-                        <span className="text-[10px] bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded border border-orange-200 font-bold tracking-wider">BAR</span>
-                      }
+              <div className="space-y-6">
+                
+                {/* SEZIONE BAR */}
+                {barOrders.length > 0 && (
+                  <div>
+                    <h4 className="text-orange-700 font-bold border-b-2 border-orange-200 mb-2 pb-1 sticky top-0 bg-white z-10 flex items-center gap-2 text-sm">
+                       ☕ AL BAR <span className="bg-orange-100 text-xs px-2 rounded-full">{barOrders.length}</span>
+                    </h4>
+                    <div className="space-y-2">
+                      {barOrders.map((order, i) => (
+                         <div key={order.userId} className="text-sm flex justify-between items-center p-2 rounded hover:bg-gray-50 border border-transparent hover:border-gray-200">
+                           <div className="flex items-center gap-2 overflow-hidden">
+                             <span className="text-gray-400 font-mono text-xs w-4">{i+1}.</span>
+                             <span className="font-bold text-gray-700 whitespace-nowrap">{order.userName}</span>
+                             <span className="text-gray-600 truncate text-xs">- {order.itemName}</span>
+                           </div>
+                           {order.waterChoice && order.waterChoice !== 'Nessuna' && (
+                             <span className="text-xs text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">
+                               {order.waterChoice === 'Naturale' ? '💧' : '🫧'}
+                             </span>
+                           )}
+                         </div>
+                      ))}
                     </div>
-                    <div className="text-gray-700 font-medium break-words leading-tight">{order.itemName}</div>
-                    {order.waterChoice && order.waterChoice !== 'Nessuna' && (
-                      <div className="text-xs text-blue-600 mt-1.5 flex items-center gap-1 font-semibold">
-                         💧 {order.waterChoice}
-                      </div>
-                    )}
                   </div>
-                ))}
+                )}
+
+                {/* SEZIONE ASPORTO */}
+                {takeoutOrders.length > 0 && (
+                  <div>
+                    <h4 className="text-red-700 font-bold border-b-2 border-red-200 mb-2 pb-1 sticky top-0 bg-white z-10 flex items-center gap-2 text-sm">
+                       🥡 DA ASPORTO <span className="bg-red-100 text-xs px-2 rounded-full">{takeoutOrders.length}</span>
+                    </h4>
+                    <div className="space-y-2">
+                      {takeoutOrders.map((order, i) => (
+                         <div key={order.userId} className="text-sm flex justify-between items-center p-2 rounded hover:bg-gray-50 border border-transparent hover:border-gray-200">
+                           <div className="flex items-center gap-2 overflow-hidden">
+                             <span className="text-gray-400 font-mono text-xs w-4">{i+1}.</span>
+                             <span className="font-bold text-gray-700 whitespace-nowrap">{order.userName}</span>
+                             <span className="text-gray-600 truncate text-xs">- {order.itemName}</span>
+                           </div>
+                           {order.waterChoice && order.waterChoice !== 'Nessuna' && (
+                             <span className="text-xs text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">
+                               {order.waterChoice === 'Naturale' ? '💧' : '🫧'}
+                             </span>
+                           )}
+                         </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {orders.length === 0 && <p className="text-gray-400 italic text-sm text-center py-4">Nessun ordine ancora.</p>}
               </div>
             </div>
 
