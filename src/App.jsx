@@ -22,8 +22,6 @@ const PUBLIC_ORDERS_COLLECTION = `artifacts/${appId}/public/data/mealOrders`;
 const CONFIG_DOC_PATH = `artifacts/${appId}/public/data/config`; 
 
 // --- CONFIGURAZIONI UTENTE ---
-// ADMIN: Solo Gioacchino ha isAdmin: true.
-// NOTA: Per aggiungere utenti, l'Admin deve aggiungere una riga qui sotto nel codice.
 const COLLEAGUES = [
   { id: 'u1', name: 'Barbara Zucchi', email: 'b.zucchi@comune.formigine.mo.it', pin: '1111', isAdmin: false },
   { id: 'u2', name: 'Chiara Italiani', email: 'c_italiani@comune.formigine.mo.it', pin: '2222', isAdmin: false },
@@ -34,7 +32,6 @@ const COLLEAGUES = [
   { id: 'u7', name: 'Andrea Vescogni', email: 'andrea.vescogni@comune.formigine.mo.it', pin: '7777', isAdmin: false },
   { id: 'u8', name: 'Patrizia Caselli', email: 'patrizia.caselli@comune.formigine.mo.it', pin: '8888', isAdmin: false },
   { id: 'u9', name: 'Roberta Falchi', email: 'rfalchi@comune.formigine.mo.it', pin: '9999', isAdmin: false },
-  // Utenti mancanti nella lista email fornita, lascio placeholder o email probabile
   { id: 'u10', name: 'Roberta Palumbo', email: 'r.palumbo@comune.formigine.mo.it', pin: '1234', isAdmin: false },
   { id: 'u11', name: 'Veronica Cantile', email: 'v.cantile@comune.formigine.mo.it', pin: '0000', isAdmin: false },
 ];
@@ -144,6 +141,7 @@ const HelpModal = ({ onClose }) => (
           <ul className="list-disc pl-5 space-y-2 text-sm text-orange-700">
             <li>Solo l'Admin (Gioacchino) vede il pulsante <strong>"Gestione"</strong> in alto a destra.</li>
             <li>Serve per bloccare i giorni di ferie (Lunedì o Giovedì chiusi).</li>
+            <li>L'Admin può <strong>sbloccare</strong> un ordine chiuso per errore.</li>
           </ul>
         </div>
       </div>
@@ -526,6 +524,15 @@ const App = () => {
     } catch (e) { console.error("Errore update status", e); }
   };
 
+  // NUOVA FUNZIONE DI SBLOCCO PER ADMIN
+  const unlockOrder = async () => {
+    if (!confirm("Vuoi davvero riaprire l'ordine? Gli utenti potranno modificare le loro scelte.")) return;
+    try {
+      const orderRef = doc(db, PUBLIC_ORDERS_COLLECTION, todayStr);
+      await setDoc(orderRef, { status: 'open' }, { merge: true });
+    } catch (e) { console.error("Errore sblocco", e); }
+  };
+
   const getAllEmails = () => {
     return COLLEAGUES
       .map(c => c.email)
@@ -793,6 +800,11 @@ const App = () => {
                     <div className="text-4xl mb-2">✅</div>
                     <p className="text-green-800 font-bold">Email Inviata</p>
                     <p className="text-xs text-gray-500">L'ordine è chiuso.</p>
+                    {user.isAdmin && (
+                        <button onClick={unlockOrder} className="mt-3 text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-1 rounded border border-gray-400">
+                            🔓 Sblocca Ordine (Solo Admin)
+                        </button>
+                    )}
                  </div>
               ) : (
                 <div className="space-y-4">
