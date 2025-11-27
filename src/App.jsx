@@ -18,11 +18,17 @@ const appId = 'mensa-app-v1';
 const initialAuthToken = null;
 
 // Percorsi Firestore
-const PUBLIC_ORDERS_COLLECTION = `artifacts/${appId}/public/data/mealOrders`;
-const CONFIG_DOC_PATH = `artifacts/${appId}/public/data/config`; 
+const PUBLIC_DATA_PATH = `artifacts/${appId}/public/data`;
+const PUBLIC_ORDERS_COLLECTION = `${PUBLIC_DATA_PATH}/mealOrders`;
+const CONFIG_DOC_PATH = `${PUBLIC_DATA_PATH}/config`; 
+const USERS_COLLECTION_PATH = `${PUBLIC_DATA_PATH}/users`;
+const SETTINGS_DOC_PATH = `${PUBLIC_DATA_PATH}/settings`;
 
-// --- CONFIGURAZIONI UTENTE ---
-const COLLEAGUES = [
+const BANNER_IMAGE_URL = "https://images.unsplash.com/photo-1559339352-11d035aa65de?q=80&w=2074&auto=format&fit=crop"; 
+
+// --- DATI INIZIALI (SEED) ---
+// Usati solo la prima volta per popolare il database se vuoto
+const INITIAL_COLLEAGUES = [
   { id: 'u1', name: 'Barbara Zucchi', email: 'b.zucchi@comune.formigine.mo.it', pin: '1111', isAdmin: false },
   { id: 'u2', name: 'Chiara Italiani', email: 'c_italiani@comune.formigine.mo.it', pin: '2222', isAdmin: false },
   { id: 'u3', name: 'Davide Cremaschi', email: 'd.cremaschi@comune.formigine.mo.it', pin: '3333', isAdmin: false },
@@ -36,9 +42,10 @@ const COLLEAGUES = [
   { id: 'u11', name: 'Veronica Cantile', email: 'v.cantile@comune.formigine.mo.it', pin: '0000', isAdmin: false },
 ];
 
-const BANNER_IMAGE_URL = "https://images.unsplash.com/photo-1559339352-11d035aa65de?q=80&w=2074&auto=format&fit=crop"; 
-const EMAIL_BAR = "gioacchino.battaglia@comune.formigine.mo.it"; 
-const PHONE_BAR = "0598751381";
+const INITIAL_SETTINGS = {
+  emailBar: "gioacchino.battaglia@comune.formigine.mo.it",
+  phoneBar: "0598751381"
+};
 
 // --- UTILITÀ CALENDARIO ---
 const formatDate = (date) => date.toISOString().split('T')[0];
@@ -66,13 +73,13 @@ const getNextOpenDay = (fromDateStr) => {
   return ALLOWED_DATES_LIST.find(d => d > todayStr) || 'Data futura non trovata';
 };
 
-const LoadingSpinner = () => (
+const LoadingSpinner = ({ text }) => (
   <div className="flex flex-col items-center justify-center p-4 min-h-[300px]">
     <svg className="animate-spin -ml-1 mr-3 h-10 w-10 text-green-600 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
     </svg>
-    <span className="text-gray-500 font-medium text-lg">Caricamento sistema...</span>
+    <span className="text-gray-500 font-medium text-lg">{text || 'Caricamento sistema...'}</span>
   </div>
 );
 
@@ -150,8 +157,8 @@ const HelpModal = ({ onClose }) => (
         <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
           <h3 className="font-bold text-orange-800 border-b border-orange-300 pb-1 mb-2">3. Funzioni Admin</h3>
           <ul className="list-disc pl-5 space-y-2 text-sm text-orange-700">
-            <li>Solo l'Admin (Gioacchino) vede il pulsante <strong>"Gestione"</strong> in alto a destra.</li>
-            <li>Serve per bloccare i giorni di ferie (Lunedì o Giovedì chiusi).</li>
+            <li>Solo l'Admin vede il pulsante <strong>"Gestione"</strong> in alto a destra.</li>
+            <li>Serve per gestire Ferie, aggiungere Utenti o cambiare Impostazioni.</li>
             <li>L'Admin può <strong>sbloccare</strong> un ordine chiuso per errore.</li>
           </ul>
         </div>
@@ -212,7 +219,7 @@ const WaterIcon = ({ type, selected, hasError }) => {
 };
 
 // --- SCHERMATA LOGIN ---
-const LoginScreen = ({ onLogin, demoMode, onToggleDemo }) => {
+const LoginScreen = ({ onLogin, demoMode, onToggleDemo, colleagues }) => {
   const [selectedColleague, setSelectedColleague] = useState('');
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
@@ -222,7 +229,7 @@ const LoginScreen = ({ onLogin, demoMode, onToggleDemo }) => {
       setError('Seleziona il tuo nome dalla lista.');
       return;
     }
-    const user = COLLEAGUES.find(c => c.id === selectedColleague);
+    const user = colleagues.find(c => c.id === selectedColleague);
     if (user && user.pin === pin) {
       onLogin(user);
     } else {
@@ -248,7 +255,7 @@ const LoginScreen = ({ onLogin, demoMode, onToggleDemo }) => {
               className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none bg-white"
             >
               <option value="">-- Seleziona il tuo nome --</option>
-              {COLLEAGUES.map(c => (
+              {colleagues.map(c => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
@@ -374,19 +381,43 @@ const AdminHistory = ({ db, onClose }) => {
   );
 };
 
-// --- COMPONENTE ADMIN: GESTIONE FERIE ---
-const AdminCalendarManager = ({ db, currentDay, onClose }) => {
+// --- COMPONENTE ADMIN: PANNELLO COMPLETO (Calendario, Utenti, Settings) ---
+const AdminPanel = ({ db, currentDay, onClose, initialColleagues, onUsersUpdate }) => {
+  const [activeTab, setActiveTab] = useState('calendar'); // 'calendar', 'users', 'settings'
   const [blockedDates, setBlockedDates] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [settings, setSettings] = useState({ emailBar: '', phoneBar: '' });
   
+  // Stato per nuovo utente
+  const [newUser, setNewUser] = useState({ name: '', email: '', pin: '', isAdmin: false });
+  // Stato per editing utente
+  const [editingUser, setEditingUser] = useState(null);
+
   useEffect(() => {
-    const fetchConfig = async () => {
-      const docRef = doc(db, CONFIG_DOC_PATH, 'holidays');
-      const snap = await getDoc(docRef);
-      if (snap.exists()) setBlockedDates(snap.data().dates || []);
+    const loadData = async () => {
+      // Load blocked dates
+      const calSnap = await getDoc(doc(db, CONFIG_DOC_PATH, 'holidays'));
+      if (calSnap.exists()) setBlockedDates(calSnap.data().dates || []);
+
+      // Load users
+      const usersSnap = await getDocs(collection(db, USERS_COLLECTION_PATH));
+      if (!usersSnap.empty) {
+        const loadedUsers = usersSnap.docs.map(d => d.data());
+        // Sort by name
+        loadedUsers.sort((a,b) => a.name.localeCompare(b.name));
+        setUsers(loadedUsers);
+      }
+
+      // Load settings
+      const settingsSnap = await getDoc(doc(db, SETTINGS_DOC_PATH, 'main'));
+      if (settingsSnap.exists()) {
+        setSettings(settingsSnap.data());
+      }
     };
-    fetchConfig();
+    loadData();
   }, [db]);
 
+  // --- LOGICA CALENDARIO ---
   const toggleDate = async (dateStr) => {
     let newDates = [];
     if (blockedDates.includes(dateStr)) {
@@ -398,31 +429,142 @@ const AdminCalendarManager = ({ db, currentDay, onClose }) => {
     await setDoc(doc(db, CONFIG_DOC_PATH, 'holidays'), { dates: newDates }, { merge: true });
   };
 
+  // --- LOGICA UTENTI ---
+  const addUser = async () => {
+    if (!newUser.name || !newUser.pin) return alert("Nome e PIN obbligatori");
+    const id = 'u_' + Date.now();
+    const userToAdd = { ...newUser, id };
+    
+    await setDoc(doc(db, USERS_COLLECTION_PATH, id), userToAdd);
+    setUsers([...users, userToAdd].sort((a,b) => a.name.localeCompare(b.name)));
+    setNewUser({ name: '', email: '', pin: '', isAdmin: false });
+    onUsersUpdate(); // Notifica app principale per ricaricare lista
+  };
+
+  const deleteUser = async (id) => {
+    if (!confirm("Eliminare utente?")) return;
+    await deleteDoc(doc(db, USERS_COLLECTION_PATH, id));
+    setUsers(users.filter(u => u.id !== id));
+    onUsersUpdate();
+  };
+
+  const saveEditUser = async () => {
+     if(!editingUser) return;
+     await setDoc(doc(db, USERS_COLLECTION_PATH, editingUser.id), editingUser, {merge: true});
+     setUsers(users.map(u => u.id === editingUser.id ? editingUser : u));
+     setEditingUser(null);
+     onUsersUpdate();
+  };
+
+  // --- LOGICA SETTINGS ---
+  const saveSettings = async () => {
+    await setDoc(doc(db, SETTINGS_DOC_PATH, 'main'), settings, { merge: true });
+    alert("Impostazioni salvate!");
+    onUsersUpdate(); // Reload generale
+  };
+
   const upcoming = ALLOWED_DATES_LIST.filter(d => d >= currentDay).slice(0, 10);
 
   return (
     <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
-      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 relative">
-        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-2xl font-bold">&times;</button>
-        <h2 className="text-xl font-bold text-gray-800 mb-4">📅 Gestione Calendario (Admin)</h2>
-        <p className="text-sm text-gray-500 mb-4">Clicca su una data per chiudere l'ufficio (Ferie/Festa). Le date rosse sono CHIUSE.</p>
-        
-        <div className="grid grid-cols-2 gap-2">
-          {upcoming.map(date => {
-            const isBlocked = blockedDates.includes(date);
-            const dateObj = new Date(date);
-            return (
-              <button 
-                key={date}
-                onClick={() => toggleDate(date)}
-                className={`p-2 rounded border text-sm font-bold ${isBlocked ? 'bg-red-100 border-red-500 text-red-700 line-through' : 'bg-green-50 border-green-200 text-green-700'}`}
-              >
-                {dateObj.toLocaleDateString('it-IT', { weekday: 'short', day: '2-digit', month: 'short' })}
-              </button>
-            )
-          })}
+      <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full h-[85vh] flex flex-col relative overflow-hidden">
+        <div className="p-4 border-b flex justify-between items-center bg-gray-50">
+           <h2 className="text-xl font-bold text-gray-800">⚙️ Pannello Amministrazione</h2>
+           <button onClick={onClose} className="text-gray-500 hover:text-red-600 font-bold text-xl">&times;</button>
         </div>
-        <button onClick={onClose} className="w-full mt-6 bg-gray-200 text-gray-800 py-2 rounded-lg font-bold">Chiudi</button>
+        
+        <div className="flex border-b">
+          <button onClick={() => setActiveTab('calendar')} className={`flex-1 py-3 font-bold text-sm ${activeTab === 'calendar' ? 'border-b-2 border-orange-500 text-orange-600 bg-orange-50' : 'text-gray-500 hover:bg-gray-50'}`}>📅 CALENDARIO</button>
+          <button onClick={() => setActiveTab('users')} className={`flex-1 py-3 font-bold text-sm ${activeTab === 'users' ? 'border-b-2 border-blue-500 text-blue-600 bg-blue-50' : 'text-gray-500 hover:bg-gray-50'}`}>👥 UTENTI</button>
+          <button onClick={() => setActiveTab('settings')} className={`flex-1 py-3 font-bold text-sm ${activeTab === 'settings' ? 'border-b-2 border-gray-500 text-gray-800 bg-gray-100' : 'text-gray-500 hover:bg-gray-50'}`}>⚙️ IMPOSTAZIONI</button>
+        </div>
+
+        <div className="p-6 overflow-y-auto flex-1">
+           {activeTab === 'calendar' && (
+             <div>
+               <p className="text-sm text-gray-500 mb-4">Clicca su una data per chiudere l'ufficio (Ferie/Festa). Le date <span className="text-red-600 font-bold">barrate e rosse</span> sono CHIUSE.</p>
+               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {upcoming.map(date => {
+                  const isBlocked = blockedDates.includes(date);
+                  const dateObj = new Date(date);
+                  return (
+                    <button 
+                      key={date}
+                      onClick={() => toggleDate(date)}
+                      className={`p-3 rounded border text-sm font-bold transition-all ${isBlocked ? 'bg-red-100 border-red-500 text-red-700 line-through' : 'bg-green-50 border-green-200 text-green-700 hover:bg-green-100'}`}
+                    >
+                      {dateObj.toLocaleDateString('it-IT', { weekday: 'short', day: '2-digit', month: 'short' })}
+                    </button>
+                  )
+                })}
+              </div>
+             </div>
+           )}
+
+           {activeTab === 'users' && (
+             <div className="space-y-6">
+                {/* ADD USER */}
+                <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                   <h4 className="font-bold text-blue-800 mb-2 text-sm">➕ Aggiungi Nuovo Collega</h4>
+                   <div className="grid grid-cols-1 sm:grid-cols-5 gap-2">
+                      <input placeholder="Nome Cognome" className="border p-2 rounded text-sm col-span-2" value={newUser.name} onChange={e => setNewUser({...newUser, name: e.target.value})} />
+                      <input placeholder="Email" className="border p-2 rounded text-sm" value={newUser.email} onChange={e => setNewUser({...newUser, email: e.target.value})} />
+                      <input placeholder="PIN (4 cifre)" maxLength={4} className="border p-2 rounded text-sm" value={newUser.pin} onChange={e => setNewUser({...newUser, pin: e.target.value})} />
+                      <div className="flex items-center gap-2">
+                        <label className="text-xs flex items-center gap-1">
+                           <input type="checkbox" checked={newUser.isAdmin} onChange={e => setNewUser({...newUser, isAdmin: e.target.checked})} /> Admin?
+                        </label>
+                        <button onClick={addUser} className="bg-blue-600 text-white px-3 py-1 rounded text-xs font-bold flex-1">AGGIUNGI</button>
+                      </div>
+                   </div>
+                </div>
+
+                {/* USER LIST */}
+                <div className="space-y-2">
+                  {users.map(u => (
+                    <div key={u.id} className="flex justify-between items-center p-2 border rounded hover:bg-gray-50">
+                       {editingUser && editingUser.id === u.id ? (
+                         <div className="flex-1 grid grid-cols-4 gap-2">
+                            <input className="border p-1 text-sm" value={editingUser.name} onChange={e => setEditingUser({...editingUser, name: e.target.value})} />
+                            <input className="border p-1 text-sm" value={editingUser.email} onChange={e => setEditingUser({...editingUser, email: e.target.value})} />
+                            <input className="border p-1 text-sm" value={editingUser.pin} onChange={e => setEditingUser({...editingUser, pin: e.target.value})} />
+                            <div className="flex gap-1">
+                              <button onClick={saveEditUser} className="bg-green-500 text-white px-2 rounded text-xs">OK</button>
+                              <button onClick={() => setEditingUser(null)} className="bg-gray-300 text-gray-700 px-2 rounded text-xs">X</button>
+                            </div>
+                         </div>
+                       ) : (
+                         <>
+                           <div>
+                             <span className="font-bold text-gray-700 block">{u.name} {u.isAdmin && "⭐"}</span>
+                             <span className="text-xs text-gray-500">{u.email} | PIN: ****</span>
+                           </div>
+                           <div className="flex gap-2">
+                              <button onClick={() => setEditingUser(u)} className="text-blue-600 text-xs hover:underline">Modifica</button>
+                              <button onClick={() => deleteUser(u.id)} className="text-red-600 text-xs hover:underline">Elimina</button>
+                           </div>
+                         </>
+                       )}
+                    </div>
+                  ))}
+                </div>
+             </div>
+           )}
+
+           {activeTab === 'settings' && (
+             <div className="space-y-4">
+                <div className="bg-gray-100 p-4 rounded-lg">
+                  <label className="block text-sm font-bold text-gray-700 mb-1">Email del Bar (Destinatario Ordini)</label>
+                  <input className="w-full p-2 border rounded" value={settings.emailBar} onChange={e => setSettings({...settings, emailBar: e.target.value})} />
+                </div>
+                <div className="bg-gray-100 p-4 rounded-lg">
+                  <label className="block text-sm font-bold text-gray-700 mb-1">Telefono del Bar (Per emergenze)</label>
+                  <input className="w-full p-2 border rounded" value={settings.phoneBar} onChange={e => setSettings({...settings, phoneBar: e.target.value})} />
+                </div>
+                <button onClick={saveSettings} className="bg-green-600 text-white px-6 py-2 rounded font-bold shadow hover:bg-green-700">Salva Impostazioni</button>
+             </div>
+           )}
+        </div>
       </div>
     </div>
   );
@@ -435,7 +577,11 @@ const App = () => {
   const [user, setUser] = useState(null); 
   const [isAuthReady, setIsAuthReady] = useState(false);
   
-  // STATO DEMO MODE
+  // Dati dinamici
+  const [colleaguesList, setColleaguesList] = useState([]);
+  const [appSettings, setAppSettings] = useState(INITIAL_SETTINGS);
+  const [dataLoaded, setDataLoaded] = useState(false); // Flag per caricamento dati Firestore
+
   const [demoMode, setDemoMode] = useState(false);
 
   const [orders, setOrders] = useState([]);
@@ -452,7 +598,7 @@ const App = () => {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
   const [showHelp, setShowHelp] = useState(false); 
-  const [showAdminCal, setShowAdminCal] = useState(false);
+  const [showAdminPanel, setShowAdminPanel] = useState(false); // Changed from showAdminCal
   const [showHistory, setShowHistory] = useState(false); 
 
   const todayDate = new Date();
@@ -474,7 +620,24 @@ const App = () => {
   const isBookingClosed = hour >= 12;
   const isEmailClosed = hour >= 13;
 
-  // 1. INIT FIREBASE & DATE CHECK
+  // RELOAD TRIGGER
+  const reloadData = async () => {
+     if(!db) return;
+     // Ricarica utenti
+     const usersSnap = await getDocs(collection(db, USERS_COLLECTION_PATH));
+     if (!usersSnap.empty) {
+        const loadedUsers = usersSnap.docs.map(d => d.data());
+        loadedUsers.sort((a,b) => a.name.localeCompare(b.name));
+        setColleaguesList(loadedUsers);
+     }
+     // Ricarica settings
+     const settingsSnap = await getDoc(doc(db, SETTINGS_DOC_PATH, 'main'));
+     if (settingsSnap.exists()) {
+        setAppSettings(settingsSnap.data());
+     }
+  };
+
+  // 1. INIT FIREBASE & SEEDING
   useEffect(() => {
     if (Object.keys(firebaseConfig).length === 0) return;
     try {
@@ -483,6 +646,35 @@ const App = () => {
       const dbInstance = getFirestore(app);
       setDb(dbInstance);
       setAuth(authInstance);
+
+      // Seeding iniziale (se non esistono utenti, carica quelli hardcoded)
+      const checkAndSeed = async () => {
+         const usersRef = collection(dbInstance, USERS_COLLECTION_PATH);
+         const snap = await getDocs(usersRef);
+         if (snap.empty) {
+            console.log("Seeding database...");
+            const batch = writeBatch(dbInstance);
+            INITIAL_COLLEAGUES.forEach(u => {
+               const docRef = doc(usersRef, u.id);
+               batch.set(docRef, u);
+            });
+            // Seed settings
+            const settingsRef = doc(dbInstance, SETTINGS_DOC_PATH, 'main');
+            batch.set(settingsRef, INITIAL_SETTINGS);
+            
+            await batch.commit();
+            setColleaguesList(INITIAL_COLLEAGUES);
+            setAppSettings(INITIAL_SETTINGS);
+         } else {
+            const loadedUsers = snap.docs.map(d => d.data());
+            loadedUsers.sort((a,b) => a.name.localeCompare(b.name));
+            setColleaguesList(loadedUsers);
+            
+            const settingsSnap = await getDoc(doc(dbInstance, SETTINGS_DOC_PATH, 'main'));
+            if (settingsSnap.exists()) setAppSettings(settingsSnap.data());
+         }
+         setDataLoaded(true);
+      };
 
       const checkDateAccess = async () => {
         const isBaseValid = ALLOWED_DATES_LIST.includes(todayStr);
@@ -514,26 +706,36 @@ const App = () => {
         }
       };
 
-      initAuth().then(() => {
-        checkDateAccess();
+      initAuth().then(async () => {
+        await checkAndSeed();
+        await checkDateAccess();
       });
 
       onAuthStateChanged(authInstance, (u) => {
         if (u) {
           setIsAuthReady(true);
           setLoading(false);
+          // Check session persistence
+          const savedUserId = sessionStorage.getItem('mealAppUser');
+          // We need to wait for colleaguesList to be loaded before restoring session
+        }
+      });
+    } catch (e) { console.error("Errore init:", e); setLoading(false); }
+  }, [demoMode]);
+
+  // Restore user session when data is loaded
+  useEffect(() => {
+      if (dataLoaded && isAuthReady) {
           const savedUserId = sessionStorage.getItem('mealAppUser');
           if (savedUserId) {
-            const found = COLLEAGUES.find(c => c.id === savedUserId);
+            const found = colleaguesList.find(c => c.id === savedUserId);
             if (found) {
                setUser(found);
                setActingAsUser(found); 
             }
           }
-        }
-      });
-    } catch (e) { console.error("Errore init:", e); setLoading(false); }
-  }, [demoMode]);
+      }
+  }, [dataLoaded, isAuthReady, colleaguesList]);
 
   // LISTENER ORDINI
   useEffect(() => {
@@ -587,7 +789,7 @@ const App = () => {
 
   const handleAdminUserChange = (e) => {
       const targetId = e.target.value;
-      const targetUser = COLLEAGUES.find(c => c.id === targetId);
+      const targetUser = colleaguesList.find(c => c.id === targetId);
       if (targetUser) {
           setActingAsUser(targetUser);
           setMessage(''); 
@@ -595,7 +797,7 @@ const App = () => {
   };
 
   const adminEditOrder = (targetUserId) => {
-      const targetUser = COLLEAGUES.find(c => c.id === targetUserId);
+      const targetUser = colleaguesList.find(c => c.id === targetUserId);
       if(targetUser) setActingAsUser(targetUser);
   };
 
@@ -683,7 +885,7 @@ const App = () => {
   };
 
   const getAllEmails = () => {
-    return COLLEAGUES
+    return colleaguesList
       .map(c => c.email)
       .filter(email => email && email.includes('@'))
       .join(',');
@@ -744,7 +946,7 @@ const App = () => {
     const subject = encodeURIComponent(`Ordine Pranzo Ufficio - ${todayDate.toLocaleDateString('it-IT')}`);
     const body = encodeURIComponent(generateEmailText());
     const ccEmails = getAllEmails();
-    const gmailLink = `https://mail.google.com/mail/?view=cm&fs=1&to=${EMAIL_BAR}&cc=${ccEmails}&su=${subject}&body=${body}`;
+    const gmailLink = `https://mail.google.com/mail/?view=cm&fs=1&to=${appSettings.emailBar}&cc=${ccEmails}&su=${subject}&body=${body}`;
     window.open(gmailLink, '_blank');
   };
 
@@ -752,16 +954,15 @@ const App = () => {
     const subject = encodeURIComponent(`Ordine Pranzo Ufficio - ${todayDate.toLocaleDateString('it-IT')}`);
     const body = encodeURIComponent(generateEmailText());
     const ccEmails = getAllEmails();
-    const mailtoLink = `mailto:${EMAIL_BAR}?cc=${ccEmails}&subject=${subject}&body=${body}`;
+    const mailtoLink = `mailto:${appSettings.emailBar}?cc=${ccEmails}&subject=${subject}&body=${body}`;
     window.location.href = mailtoLink;
   };
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center"><LoadingSpinner /></div>;
+  if (loading || !dataLoaded) return <div className="min-h-screen flex items-center justify-center"><LoadingSpinner text="Inizializzazione Database..." /></div>;
 
   if (!isShopOpen && !demoMode) return <ClosedScreen nextDate={getNextOpenDay(todayStr)} onEnableDemo={() => { setDemoMode(true); setIsShopOpen(true); }} />;
-  if (!user) return <LoginScreen onLogin={handleLogin} demoMode={demoMode} onToggleDemo={() => setDemoMode(prev => !prev)} />;
+  if (!user) return <LoginScreen onLogin={handleLogin} demoMode={demoMode} onToggleDemo={() => setDemoMode(prev => !prev)} colleagues={colleaguesList} />;
 
-  // Separazione ordini per visualizzazione
   const barOrders = orders.filter(o => !o.isTakeout);
   const takeoutOrders = orders.filter(o => o.isTakeout);
 
@@ -791,7 +992,7 @@ const App = () => {
         <div className="absolute top-4 right-4 z-50 flex gap-2">
           {user.isAdmin && (
             <>
-              <button onClick={() => setShowAdminCal(true)} className="bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold px-3 py-1 rounded-full shadow border border-orange-400">
+              <button onClick={() => setShowAdminPanel(true)} className="bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold px-3 py-1 rounded-full shadow border border-orange-400">
                 📅 Gestione
               </button>
               <button onClick={() => setShowHistory(true)} className="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold px-3 py-1 rounded-full shadow border border-purple-500">
@@ -814,7 +1015,7 @@ const App = () => {
 
         {/* MODALI */}
         {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
-        {showAdminCal && <AdminCalendarManager db={db} currentDay={todayStr} onClose={() => setShowAdminCal(false)} />}
+        {showAdminPanel && <AdminPanel db={db} currentDay={todayStr} onClose={() => setShowAdminPanel(false)} initialColleagues={colleaguesList} onUsersUpdate={reloadData} />}
         {showHistory && <AdminHistory db={db} onClose={() => setShowHistory(false)} />}
 
         {/* BANNER */}
@@ -830,7 +1031,7 @@ const App = () => {
              <div>
                <h1 className="text-4xl font-extrabold tracking-tight uppercase drop-shadow-lg" style={{fontFamily: 'serif'}}>7 MILA CAFFÈ</h1>
                <div className="flex items-center justify-center md:justify-start gap-2 mt-1">
-                 <span className="bg-white/90 text-green-800 px-2 py-0.5 rounded text-xs font-bold tracking-widest shadow-sm">TEL. 059 8751381</span>
+                 <span className="bg-white/90 text-green-800 px-2 py-0.5 rounded text-xs font-bold tracking-widest shadow-sm">TEL. {appSettings.phoneBar}</span>
                </div>
              </div>
              <div className="hidden md:block max-w-md italic font-serif text-green-50 text-lg border-l-2 border-green-400 pl-4 drop-shadow-md">
@@ -885,8 +1086,8 @@ const App = () => {
           <div className="bg-gray-900 border-b-4 border-red-600 p-6 text-center sticky top-0 z-50 shadow-2xl">
              <h2 className="text-white font-bold text-2xl uppercase mb-2">🛑 ORDINE WEB CHIUSO</h2>
              <p className="text-gray-300 mb-4 text-sm">Sono passate le 12:00. Non inviare più email, il bar non la leggerebbe.</p>
-             <a href={`tel:${PHONE_BAR}`} className="inline-block bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-8 rounded-full shadow-lg text-lg animate-bounce">
-                📞 CHIAMA IL BAR: {PHONE_BAR}
+             <a href={`tel:${appSettings.phoneBar}`} className="inline-block bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-8 rounded-full shadow-lg text-lg animate-bounce">
+                📞 CHIAMA IL BAR: {appSettings.phoneBar}
              </a>
              {user.isAdmin && (
                 <div className="mt-4 border-t border-gray-700 pt-4">
@@ -922,7 +1123,7 @@ const App = () => {
                         onChange={handleAdminUserChange}
                         className="w-full p-2 text-sm border border-orange-300 rounded bg-white focus:ring-2 focus:ring-orange-500 outline-none"
                     >
-                        {COLLEAGUES.map(c => (
+                        {colleaguesList.map(c => (
                             <option key={c.id} value={c.id}>
                                 {c.id === user.id ? 'Me Stesso' : c.name}
                             </option>
