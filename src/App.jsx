@@ -38,7 +38,7 @@ const COLLEAGUES = [
 
 const BANNER_IMAGE_URL = "https://images.unsplash.com/photo-1559339352-11d035aa65de?q=80&w=2074&auto=format&fit=crop"; 
 const EMAIL_BAR = "gioacchino.battaglia@comune.formigine.mo.it"; 
-const PHONE_BAR = "059/8751381";
+const PHONE_BAR = "0598751381";
 
 // --- UTILITÀ CALENDARIO ---
 const formatDate = (date) => date.toISOString().split('T')[0];
@@ -128,21 +128,19 @@ const HelpModal = ({ onClose }) => (
         <div className="bg-red-50 p-4 rounded-lg border border-red-200">
           <h3 className="font-bold text-red-800 border-b border-red-300 pb-1 mb-2">2. Invio Ordine (Entro le 12:00)</h3>
           <ul className="list-disc pl-5 space-y-2 text-sm text-red-700">
-            <li>Dalle 10:30 appare l'avviso. Alle <strong>12:00 STOP ORDINI</strong>.</li>
-            <li><strong>CHIUNQUE</strong> può inviare l'email se l'Admin non c'è.</li>
+            <li>Dalle 10:30 apparirà un avviso rosso lampeggiante.</li>
+            <li><strong>CHIUNQUE</strong> (Admin o Collega) può inviare l'email (entro le 12:00).</li>
             <li>Clicca su <strong>"Gmail Web"</strong> (da PC) o <strong>"App Email"</strong> (da Cellulare).</li>
             <li>Premi invia nella tua mail.</li>
             <li>Torna qui e clicca <strong>"CONFERMA INVIO"</strong> per bloccare l'ordine.</li>
           </ul>
         </div>
         
-        <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
-          <h3 className="font-bold text-orange-800 border-b border-orange-300 pb-1 mb-2">3. Funzioni Admin</h3>
-          <ul className="list-disc pl-5 space-y-2 text-sm text-orange-700">
-            <li>Solo l'Admin (Gioacchino) vede il pulsante <strong>"Gestione"</strong>.</li>
-            <li>Serve per bloccare i giorni di ferie.</li>
-            <li>L'Admin può <strong>inserire ordini anche dopo le 12:00</strong> o sbloccare un invio errato.</li>
-          </ul>
+        <div className="bg-gray-100 p-4 rounded-lg border border-gray-300">
+          <h3 className="font-bold text-gray-800 border-b border-gray-300 pb-1 mb-2">3. Dopo le 12:00 (STOP)</h3>
+          <p className="text-sm text-gray-700">
+            Alle 12:00 il sistema si blocca per tutti. Solo l'Admin può forzare modifiche o invii tardivi.
+          </p>
         </div>
       </div>
 
@@ -361,12 +359,12 @@ const App = () => {
   const hour = time.getHours();
   const minute = time.getMinutes();
 
-  // LOGICA ORARIA
+  // LOGICA ORARIA AGGIORNATA
   // Warning (Giallo/Rosso): Dalle 10:30 fino alle 11:59
   const isLateWarning = (hour === 10 && minute >= 30) || (hour === 11);
   
-  // Hard Stop (Rosso/Blocco): Dalle 12:00 in poi
-  const isTooLate = hour >= 12;
+  // STOP TOTALE (Blocco Ordini E Email per normali): Dalle 12:00 in poi
+  const isEverythingClosed = hour >= 12;
 
   // 1. INIT FIREBASE & DATE CHECK
   useEffect(() => {
@@ -467,9 +465,9 @@ const App = () => {
   };
 
   const placeOrder = async () => {
-    // BLOCCO UTENTI NORMALI DOPO LE 12:00 (Admin può proseguire)
+    // BLOCCO RIGOROSO DOPO LE 12:00 (Salvo Admin)
     if (orderStatus === 'sent') { alert("Ordine già inviato al bar! Non puoi modificare."); return; }
-    if (isTooLate && !user.isAdmin) { alert("Troppo tardi! Sono passate le 12:00. Solo l'admin può modificare."); return; }
+    if (isEverythingClosed && !user.isAdmin) { alert("Troppo tardi! Sono passate le 12:00. Solo l'admin può modificare."); return; }
 
     const newErrors = {};
     let hasError = false;
@@ -670,13 +668,13 @@ const App = () => {
                   Data: <span className="text-white font-bold uppercase">{todayDate.toLocaleDateString('it-IT')}</span>
                 </div>
                 <div className="font-mono font-bold text-white flex items-center gap-2">
-                   {isLateWarning && orderStatus !== 'sent' && !isTooLate && <span className="text-yellow-300 font-bold hidden sm:inline">⚠️ IN CHIUSURA </span>}
-                   {isTooLate && orderStatus !== 'sent' && <span className="text-red-400 font-bold hidden sm:inline">🛑 TEMPO SCADUTO </span>}
+                   {isLateWarning && orderStatus !== 'sent' && !isEverythingClosed && <span className="text-yellow-300 font-bold hidden sm:inline">⚠️ IN CHIUSURA </span>}
+                   {isEverythingClosed && orderStatus !== 'sent' && <span className="text-red-400 font-bold hidden sm:inline">🛑 TEMPO SCADUTO </span>}
                    {time.toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'})}
                 </div>
             </div>
             <div className="flex items-center justify-center gap-2 text-xs sm:text-sm">
-                <div className={`flex items-center gap-1 px-3 py-1 rounded-full ${orderStatus !== 'sent' && !isTooLate ? 'bg-green-600 font-bold' : 'bg-gray-700 text-gray-400'}`}>
+                <div className={`flex items-center gap-1 px-3 py-1 rounded-full ${orderStatus !== 'sent' && !isEverythingClosed ? 'bg-green-600 font-bold' : 'bg-gray-700 text-gray-400'}`}>
                     <span className="bg-white text-gray-900 rounded-full w-4 h-4 flex items-center justify-center text-[10px]">1</span>
                     Raccolta
                 </div>
@@ -689,7 +687,7 @@ const App = () => {
         </div>
 
         {/* --- ALERT INVIO TARDIVO (10:30 - 12:00) --- */}
-        {isLateWarning && orderStatus !== 'sent' && !isTooLate && (
+        {isLateWarning && orderStatus !== 'sent' && !isEverythingClosed && (
           <div className="bg-red-100 border-b-4 border-red-500 p-4 text-center sticky top-0 z-40 shadow-xl animate-pulse">
              <h2 className="text-red-800 font-bold text-xl uppercase mb-2">⏰ È Tardi! Chiudi l'ordine</h2>
              <p className="text-red-600 mb-4 text-sm font-bold">Sono passate le 10:30. Il primo che vede questo messaggio deve inviare l'email!</p>
@@ -705,7 +703,7 @@ const App = () => {
         )}
 
         {/* --- ALERT CRITICO (12:00+) --- */}
-        {isTooLate && orderStatus !== 'sent' && (
+        {isEverythingClosed && orderStatus !== 'sent' && (
           <div className="bg-gray-900 border-b-4 border-red-600 p-6 text-center sticky top-0 z-50 shadow-2xl">
              <h2 className="text-white font-bold text-2xl uppercase mb-2">🛑 ORDINE WEB CHIUSO</h2>
              <p className="text-gray-300 mb-4 text-sm">Sono passate le 12:00. Non inviare più email, il bar non la leggerebbe.</p>
@@ -717,6 +715,7 @@ const App = () => {
                     <p className="text-xs text-gray-400 mb-2">Area Admin: Puoi forzare l'invio se necessario.</p>
                     <div className="flex justify-center gap-2">
                         <button onClick={openGmail} className="bg-gray-700 hover:bg-gray-600 text-white text-xs py-2 px-4 rounded border border-gray-500">Forza Gmail</button>
+                        <button onClick={openDefaultMail} className="bg-gray-700 hover:bg-gray-600 text-white text-xs py-2 px-4 rounded border border-gray-500">Forza App Mail</button>
                         <button onClick={markAsSent} className="bg-green-700 hover:bg-green-600 text-white text-xs py-2 px-4 rounded border border-green-500">Forza "Inviato"</button>
                     </div>
                 </div>
@@ -743,14 +742,14 @@ const App = () => {
                       setDishName(e.target.value);
                       if(errors.dishName) setErrors(prev => ({...prev, dishName: false}));
                     }}
-                    disabled={orderStatus === 'sent' || (isTooLate && !user.isAdmin)}
-                    placeholder={(orderStatus === 'sent' || (isTooLate && !user.isAdmin)) ? "Ordine chiuso" : "Es: Insalatona pollo e noci..."}
-                    className={`w-full border-2 p-3 rounded-lg text-lg font-bold text-gray-800 outline-none transition-all placeholder:font-normal placeholder:text-gray-300 ${errors.dishName ? 'border-red-400 bg-red-50' : 'border-green-100 focus:border-green-500'} ${(orderStatus === 'sent' || (isTooLate && !user.isAdmin)) ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''}`}
+                    disabled={orderStatus === 'sent' || (isEverythingClosed && !user.isAdmin)}
+                    placeholder={(orderStatus === 'sent' || (isEverythingClosed && !user.isAdmin)) ? "Ordine chiuso" : "Es: Insalatona pollo e noci..."}
+                    className={`w-full border-2 p-3 rounded-lg text-lg font-bold text-gray-800 outline-none transition-all placeholder:font-normal placeholder:text-gray-300 ${errors.dishName ? 'border-red-400 bg-red-50' : 'border-green-100 focus:border-green-500'} ${(orderStatus === 'sent' || (isEverythingClosed && !user.isAdmin)) ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''}`}
                 />
             </div>
 
             {/* SEZIONE 2 & 3 */}
-            <div className={`bg-white border-2 border-slate-200 p-5 rounded-xl shadow-lg sticky bottom-4 z-20 ${orderStatus === 'sent' || (isTooLate && !user.isAdmin) ? 'opacity-75 grayscale' : ''}`}>
+            <div className={`bg-white border-2 border-slate-200 p-5 rounded-xl shadow-lg sticky bottom-4 z-20 ${orderStatus === 'sent' || (isEverythingClosed && !user.isAdmin) ? 'opacity-75 grayscale' : ''}`}>
                 <h3 className="font-bold text-gray-700 mb-3 text-sm uppercase tracking-wide border-b pb-1">2. Completa il tuo ordine</h3>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
@@ -758,8 +757,8 @@ const App = () => {
                      <label className={`block text-xs font-bold uppercase mb-2 ${errors.water ? 'text-red-600' : 'text-gray-500'}`}>Scelta Acqua *</label>
                      <div className="flex gap-2 h-20">
                         {['Nessuna', 'Naturale', 'Frizzante'].map(opt => (
-                           <div key={opt} className={`flex-1 ${orderStatus === 'sent' || (isTooLate && !user.isAdmin) ? 'pointer-events-none' : ''}`} onClick={() => {
-                             if(orderStatus !== 'sent' && (!isTooLate || user.isAdmin)) {
+                           <div key={opt} className={`flex-1 ${orderStatus === 'sent' || (isEverythingClosed && !user.isAdmin) ? 'pointer-events-none' : ''}`} onClick={() => {
+                             if(orderStatus !== 'sent' && (!isEverythingClosed || user.isAdmin)) {
                                setSelectedWater(opt);
                                if(errors.water) setErrors(prev => ({...prev, water: false}));
                              }
@@ -776,7 +775,7 @@ const App = () => {
                         {['bar', 'asporto'].map(choice => (
                           <button 
                             key={choice}
-                            disabled={orderStatus === 'sent' || (isTooLate && !user.isAdmin)}
+                            disabled={orderStatus === 'sent' || (isEverythingClosed && !user.isAdmin)}
                             onClick={() => {
                               setDiningChoice(choice);
                               if(errors.dining) setErrors(prev => ({...prev, dining: false}));
@@ -801,10 +800,10 @@ const App = () => {
                         <span className="text-green-800 font-bold text-lg">🔒 Ordine Inviato</span>
                         <p className="text-green-700 text-xs">Non è più possibile modificare le scelte.</p>
                       </div>
-                   ) : isTooLate && !user.isAdmin ? (
+                   ) : isEverythingClosed && !user.isAdmin ? (
                       <div className="bg-red-100 p-3 rounded-lg text-center border border-red-300">
-                        <span className="text-red-800 font-bold text-lg">🛑 Tempo Scaduto</span>
-                        <p className="text-red-700 text-xs">Chiama il bar per ordinare.</p>
+                        <span className="text-red-800 font-bold text-lg">🛑 Ordini Chiusi</span>
+                        <p className="text-red-700 text-xs">Le prenotazioni chiudono alle 12:00.</p>
                       </div>
                    ) : orders.some(o => o.userId === user.id) ? (
                       <div className="flex items-center justify-between bg-green-50 p-2 rounded border border-green-200">
@@ -822,7 +821,7 @@ const App = () => {
                         <span>📨 Salva la tua scelta</span>
                       </button>
                     )}
-                    {message && orderStatus !== 'sent' && !(isTooLate && !user.isAdmin) && <p className={`text-center font-bold mt-2 text-sm animate-pulse ${message.includes('Errore') || message.includes('evidenziati') ? 'text-red-600' : 'text-green-600'}`}>{message}</p>}
+                    {message && orderStatus !== 'sent' && !(isEverythingClosed && !user.isAdmin) && <p className={`text-center font-bold mt-2 text-sm animate-pulse ${message.includes('Errore') || message.includes('evidenziati') ? 'text-red-600' : 'text-green-600'}`}>{message}</p>}
                 </div>
               </div>
             </div>
@@ -850,29 +849,38 @@ const App = () => {
               ) : (
                 <div className="space-y-4">
                   {/* FASE 1 */}
-                  <div className="relative border-l-2 border-blue-400 pl-4 ml-2">
-                    <div className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-blue-500 border-2 border-white"></div>
-                    <h4 className="text-sm font-bold text-blue-800 mb-1">Fase 1: Invia l'Email</h4>
-                    <p className="text-xs text-slate-500 mb-2">Apri il tuo programma di posta. Il testo è già pronto.</p>
-                    <div className="grid gap-2">
-                        <button onClick={openGmail} className="w-full border py-2 rounded font-bold shadow-sm flex items-center justify-center gap-2 text-sm bg-white border-red-200 text-red-700 hover:bg-red-50">
-                            <span className="text-lg">🔴</span> Gmail Web (PC)
-                        </button>
-                        <button onClick={openDefaultMail} className="w-full border py-2 rounded font-bold shadow-sm flex items-center justify-center gap-2 text-sm bg-white border-slate-300 text-slate-700 hover:bg-slate-50">
-                            <span className="text-lg">📱</span> App Email (Mobile)
-                        </button>
+                  {isEverythingClosed && !user.isAdmin ? (
+                      <div className="bg-red-50 border border-red-200 p-4 rounded text-center">
+                          <p className="text-red-600 font-bold mb-2">⛔ Tempo Email Scaduto</p>
+                          <p className="text-xs text-gray-600">Non è più possibile inviare l'email (12:00+). Chiama il bar.</p>
+                      </div>
+                  ) : (
+                    <div className="relative border-l-2 border-blue-400 pl-4 ml-2">
+                        <div className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-blue-500 border-2 border-white"></div>
+                        <h4 className="text-sm font-bold text-blue-800 mb-1">Fase 1: Invia l'Email</h4>
+                        <p className="text-xs text-slate-500 mb-2">Apri il tuo programma di posta. Il testo è già pronto.</p>
+                        <div className="grid gap-2">
+                            <button onClick={openGmail} className="w-full border py-2 rounded font-bold shadow-sm flex items-center justify-center gap-2 text-sm bg-white border-red-200 text-red-700 hover:bg-red-50">
+                                <span className="text-lg">🔴</span> Gmail Web (PC)
+                            </button>
+                            <button onClick={openDefaultMail} className="w-full border py-2 rounded font-bold shadow-sm flex items-center justify-center gap-2 text-sm bg-white border-slate-300 text-slate-700 hover:bg-slate-50">
+                                <span className="text-lg">📱</span> App Email (Mobile)
+                            </button>
+                        </div>
                     </div>
-                  </div>
+                  )}
 
                   {/* FASE 2 */}
-                  <div className="relative border-l-2 border-green-400 pl-4 ml-2">
-                    <div className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-green-500 border-2 border-white"></div>
-                    <h4 className="text-sm font-bold text-green-800 mb-1">Fase 2: Conferma nel sistema</h4>
-                    <p className="text-xs text-slate-500 mb-2">Solo DOPO aver inviato l'email reale, clicca qui per chiudere l'ordine.</p>
-                    <button onClick={markAsSent} className="w-full py-3 rounded font-bold shadow flex items-center justify-center gap-2 text-sm bg-green-600 hover:bg-green-700 text-white animate-pulse">
-                        <span>✅</span> CONFERMA INVIO
-                    </button>
-                  </div>
+                  {(!isEverythingClosed || user.isAdmin) && (
+                    <div className="relative border-l-2 border-green-400 pl-4 ml-2">
+                        <div className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-green-500 border-2 border-white"></div>
+                        <h4 className="text-sm font-bold text-green-800 mb-1">Fase 2: Conferma nel sistema</h4>
+                        <p className="text-xs text-slate-500 mb-2">Solo DOPO aver inviato l'email reale, clicca qui per chiudere l'ordine.</p>
+                        <button onClick={markAsSent} className="w-full py-3 rounded font-bold shadow flex items-center justify-center gap-2 text-sm bg-green-600 hover:bg-green-700 text-white animate-pulse">
+                            <span>✅</span> CONFERMA INVIO
+                        </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
