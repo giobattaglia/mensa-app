@@ -26,26 +26,23 @@ const SETTINGS_DOC_PATH = `${PUBLIC_DATA_PATH}/settings`;
 
 const BANNER_IMAGE_URL = "https://images.unsplash.com/photo-1559339352-11d035aa65de?q=80&w=2074&auto=format&fit=crop"; 
 
-// --- PASSWORD DI SICUREZZA PER IL RESET DEL DATABASE ---
-const DB_RESET_PASSWORD = "admin"; 
-
 // --- DATI INIZIALI (SEED) ---
 // Usati SOLO se premi "RIPRISTINA DB".
-// Crea solo l'admin principale per permetterti di entrare e configurare gli altri.
-const INITIAL_COLLEAGUES = [
-  { 
+const INITIAL_ADMIN = { 
     id: 'u_admin_master', 
     name: 'Gioacchino Battaglia', 
     email: 'gioacchino.battaglia@comune.formigine.mo.it', 
     pin: '7378', 
     isAdmin: true 
-  }
-];
+};
 
 const INITIAL_SETTINGS = {
   emailBar: "gioacchino.battaglia@comune.formigine.mo.it",
   phoneBar: "0598751381"
 };
+
+// --- PASSWORD DI EMERGENZA ---
+const DB_RESET_PASSWORD = "admin";
 
 // --- UTILITÀ CALENDARIO ---
 const formatDate = (date) => date.toISOString().split('T')[0];
@@ -249,7 +246,7 @@ const LoginScreen = ({ onLogin, demoMode, onToggleDemo, colleagues = [], onReset
   };
   
   const handleResetClick = () => {
-      const pwd = prompt("ATTENZIONE: Stai per cancellare tutto il database e ripristinare solo l'utente Admin iniziale. Inserisci password:");
+      const pwd = prompt("ATTENZIONE: Stai per cancellare TUTTI gli utenti e resettare il database allo stato iniziale. Inserisci password:");
       if (pwd === DB_RESET_PASSWORD) {
           onResetDB();
       } else {
@@ -423,10 +420,10 @@ const AdminHistory = ({ db, onClose }) => {
 };
 
 // --- COMPONENTE ADMIN: PANNELLO COMPLETO (Calendario, Utenti, Settings) ---
-const AdminPanel = ({ db, currentDay, onClose, onUsersUpdate }) => {
+const AdminPanel = ({ db, currentDay, onClose, initialColleagues }) => {
   const [activeTab, setActiveTab] = useState('calendar'); // 'calendar', 'users', 'settings'
   const [blockedDates, setBlockedDates] = useState([]);
-  const [users, setUsers] = useState([]);
+  const [users, setUsers] = useState(initialColleagues || []);
   const [settings, setSettings] = useState({ emailBar: '', phoneBar: '' });
   
   // Stato per nuovo utente
@@ -438,27 +435,26 @@ const AdminPanel = ({ db, currentDay, onClose, onUsersUpdate }) => {
   const [saveMsg, setSaveMsg] = useState('');
 
   useEffect(() => {
-    const loadData = async () => {
-      // Load blocked dates
-      const calSnap = await getDoc(doc(db, CONFIG_DOC_PATH, 'holidays'));
-      if (calSnap.exists()) setBlockedDates(calSnap.data().dates || []);
-
-      // Load users
-      const usersSnap = await getDocs(collection(db, USERS_COLLECTION_PATH));
-      if (!usersSnap.empty) {
-        const loadedUsers = usersSnap.docs.map(d => d.data());
-        // Sort by name
+    if (!db) return;
+    
+    // LISTENER REALTIME PER GLI UTENTI
+    const unsubUsers = onSnapshot(collection(db, USERS_COLLECTION_PATH), (snap) => {
+        const loadedUsers = snap.docs.map(d => d.data());
         loadedUsers.sort((a,b) => a.name.localeCompare(b.name));
         setUsers(loadedUsers);
-      }
+    });
 
-      // Load settings
-      const settingsSnap = await getDoc(doc(db, SETTINGS_DOC_PATH, 'main'));
-      if (settingsSnap.exists()) {
-        setSettings(settingsSnap.data());
-      }
-    };
-    loadData();
+    // LOAD CALENDAR
+    getDoc(doc(db, CONFIG_DOC_PATH, 'holidays')).then(snap => {
+        if (snap.exists()) setBlockedDates(snap.data().dates || []);
+    });
+
+    // LOAD SETTINGS
+    getDoc(doc(db, SETTINGS_DOC_PATH, 'main')).then(snap => {
+        if (snap.exists()) setSettings(snap.data());
+    });
+
+    return () => unsubUsers();
   }, [db]);
 
   // --- LOGICA CALENDARIO ---
@@ -482,11 +478,10 @@ const AdminPanel = ({ db, currentDay, onClose, onUsersUpdate }) => {
     
     try {
       await setDoc(doc(db, USERS_COLLECTION_PATH, id), userToAdd);
-      setUsers([...users, userToAdd].sort((a,b) => a.name.localeCompare(b.name)));
+      // Non serve aggiornare lo stato 'users' manualmente, ci pensa onSnapshot
       setNewUser({ name: '', email: '', pin: '', isAdmin: false });
       setSaveMsg('✅ Utente salvato!');
       setTimeout(() => setSaveMsg(''), 2000);
-      // Non serve reloadData qui perché il listener in App lo farà
     } catch (e) {
       console.error(e);
       setSaveMsg('❌ Errore salvataggio');
@@ -497,7 +492,6 @@ const AdminPanel = ({ db, currentDay, onClose, onUsersUpdate }) => {
     if (!confirm("Eliminare utente?")) return;
     try {
       await deleteDoc(doc(db, USERS_COLLECTION_PATH, id));
-      setUsers(users.filter(u => u.id !== id));
     } catch (e) { console.error(e); alert("Errore eliminazione"); }
   };
 
@@ -505,7 +499,6 @@ const AdminPanel = ({ db, currentDay, onClose, onUsersUpdate }) => {
      if(!editingUser) return;
      try {
        await setDoc(doc(db, USERS_COLLECTION_PATH, editingUser.id), editingUser, {merge: true});
-       setUsers(users.map(u => u.id === editingUser.id ? editingUser : u));
        setEditingUser(null);
      } catch (e) { console.error(e); alert("Errore modifica"); }
   };
@@ -636,7 +629,7 @@ const App = () => {
   // Dati dinamici
   const [colleaguesList, setColleaguesList] = useState([]);
   const [appSettings, setAppSettings] = useState(INITIAL_SETTINGS);
-  const [dataLoaded, setDataLoaded] = useState(false); // Flag per caricamento dati Firestore
+  const [dataLoaded, setDataLoaded] = useState(false); 
 
   const [demoMode, setDemoMode] = useState(false);
 
@@ -730,7 +723,7 @@ const App = () => {
       setDb(dbInstance);
       setAuth(authInstance);
 
-      // Listener in tempo reale per utenti e settings
+      // Listener in tempo reale per utenti e settings (QUESTO ERA IL PEZZO CHIAVE MANCANTE)
       const subscribeToData = () => {
          // Users
          const unsubUsers = onSnapshot(collection(dbInstance, USERS_COLLECTION_PATH), (snap) => {
@@ -1112,7 +1105,7 @@ const App = () => {
 
         {/* MODALI */}
         {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
-        {showAdminPanel && <AdminPanel db={db} currentDay={todayStr} onClose={() => setShowAdminPanel(false)} />}
+        {showAdminPanel && <AdminPanel db={db} currentDay={todayStr} onClose={() => setShowAdminPanel(false)} initialColleagues={colleaguesList} onUsersUpdate={reloadData} />}
         {showHistory && <AdminHistory db={db} onClose={() => setShowHistory(false)} />}
 
         {/* BANNER */}
