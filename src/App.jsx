@@ -249,7 +249,7 @@ const LoginScreen = ({ onLogin, demoMode, onToggleDemo, colleagues = [], onReset
   };
   
   const handleResetClick = () => {
-      const pwd = prompt("ATTENZIONE: Stai per cancellare TUTTI gli utenti e resettare il database con solo l'Admin. Inserisci password:");
+      const pwd = prompt("ATTENZIONE: Stai per cancellare TUTTI gli utenti e resettare il database allo stato iniziale (Solo Admin). Inserisci password:");
       if (pwd === DB_RESET_PASSWORD) {
           onResetDB();
       } else {
@@ -339,7 +339,7 @@ const LoginScreen = ({ onLogin, demoMode, onToggleDemo, colleagues = [], onReset
              onClick={handleResetClick}
              className="text-[10px] text-red-400 hover:text-red-600 underline mt-2 font-bold bg-red-50 px-2 py-1 rounded"
            >
-             ⚠️ RIPRISTINA DB
+             ⚠️ RIPRISTINA UTENTI DA CODICE
            </button>
         </div>
       </div>
@@ -423,7 +423,7 @@ const AdminHistory = ({ db, onClose }) => {
 };
 
 // --- COMPONENTE ADMIN: PANNELLO COMPLETO (Calendario, Utenti, Settings) ---
-const AdminPanel = ({ db, currentDay, onClose, initialColleagues, onUsersUpdate }) => {
+const AdminPanel = ({ db, currentDay, onClose, onUsersUpdate }) => {
   const [activeTab, setActiveTab] = useState('calendar'); // 'calendar', 'users', 'settings'
   const [blockedDates, setBlockedDates] = useState([]);
   const [users, setUsers] = useState([]);
@@ -440,7 +440,7 @@ const AdminPanel = ({ db, currentDay, onClose, initialColleagues, onUsersUpdate 
   useEffect(() => {
     if (!db) return;
     
-    // LISTENER REALTIME PER GLI UTENTI (MODIFICA: Corretto per aggiornamento immediato)
+    // LISTENER REALTIME PER GLI UTENTI
     const unsubUsers = onSnapshot(collection(db, USERS_COLLECTION_PATH), (snap) => {
         const loadedUsers = snap.docs.map(d => d.data());
         loadedUsers.sort((a,b) => a.name.localeCompare(b.name));
@@ -481,7 +481,7 @@ const AdminPanel = ({ db, currentDay, onClose, initialColleagues, onUsersUpdate 
     
     try {
       await setDoc(doc(db, USERS_COLLECTION_PATH, id), userToAdd);
-      // Reset form
+      // Non serve aggiornare lo stato 'users' manualmente, ci pensa onSnapshot
       setNewUser({ name: '', email: '', pin: '', isAdmin: false });
       setSaveMsg('✅ Utente salvato!');
       setTimeout(() => setSaveMsg(''), 2000);
@@ -632,7 +632,7 @@ const App = () => {
   // Dati dinamici
   const [colleaguesList, setColleaguesList] = useState([]);
   const [appSettings, setAppSettings] = useState(INITIAL_SETTINGS);
-  const [dataLoaded, setDataLoaded] = useState(false); 
+  const [dataLoaded, setDataLoaded] = useState(false); // Flag per caricamento dati Firestore
 
   const [demoMode, setDemoMode] = useState(false);
 
@@ -650,7 +650,7 @@ const App = () => {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
   const [showHelp, setShowHelp] = useState(false); 
-  const [showAdminPanel, setShowAdminPanel] = useState(false); 
+  const [showAdminPanel, setShowAdminPanel] = useState(false); // Changed from showAdminCal
   const [showHistory, setShowHistory] = useState(false); 
 
   const todayDate = new Date();
@@ -674,9 +674,21 @@ const App = () => {
   const isBookingClosed = hour >= 12;
   const isEmailClosed = hour >= 13;
 
-  // RELOAD TRIGGER (Non più strettamente necessario grazie al listener, ma mantenuto per sicurezza)
+  // RELOAD TRIGGER
   const reloadData = async () => {
-    // Lasciato vuoto intenzionalmente, gestito dal listener
+     if(!db) return;
+     // Ricarica utenti
+     const usersSnap = await getDocs(collection(db, USERS_COLLECTION_PATH));
+     if (!usersSnap.empty) {
+        const loadedUsers = usersSnap.docs.map(d => d.data());
+        loadedUsers.sort((a,b) => a.name.localeCompare(b.name));
+        setColleaguesList(loadedUsers);
+     }
+     // Ricarica settings
+     const settingsSnap = await getDoc(doc(db, SETTINGS_DOC_PATH, 'main'));
+     if (settingsSnap.exists()) {
+        setAppSettings(settingsSnap.data());
+     }
   };
 
   // FORZATURA MANUALE (DEFINITA PRIMA DELL'USO)
