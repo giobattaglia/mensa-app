@@ -17,28 +17,28 @@ const firebaseConfig = {
 const appId = 'mensa-app-v1'; 
 const initialAuthToken = null;
 
-// Percorsi Firestore
+// Percorsi Firestore (Solo per gli ordini e le ferie, NON per gli utenti)
 const PUBLIC_DATA_PATH = `artifacts/${appId}/public/data`;
 const PUBLIC_ORDERS_COLLECTION = `${PUBLIC_DATA_PATH}/mealOrders`;
 const CONFIG_DOC_PATH = `${PUBLIC_DATA_PATH}/config`; 
-const USERS_COLLECTION_PATH = `${PUBLIC_DATA_PATH}/users`;
 const SETTINGS_DOC_PATH = `${PUBLIC_DATA_PATH}/settings`;
 
 const BANNER_IMAGE_URL = "https://images.unsplash.com/photo-1559339352-11d035aa65de?q=80&w=2074&auto=format&fit=crop"; 
 
-// --- PASSWORD DI SICUREZZA ---
-const DB_RESET_PASSWORD = "admin";
-
-// --- DATI INIZIALI (SEED) ---
-// IMPORTANTE: Questa è la lista di sicurezza. Se il DB è vuoto o resettato, si usa questa.
-const INITIAL_COLLEAGUES = [
-  { 
-    id: 'u_admin_gioacchino', 
-    name: 'Gioacchino Battaglia', 
-    email: 'gioacchino.battaglia@comune.formigine.mo.it', 
-    pin: '7378', 
-    isAdmin: true 
-  }
+// --- 👥 LISTA COLLEGHI (MODIFICA QUI PER AGGIUNGERE/RIMUOVERE) ---
+// Questa lista è ora la fonte ufficiale. Modifica il codice per cambiare i PIN.
+const COLLEAGUES_LIST = [
+  { id: 'u1', name: 'Barbara Zucchi', email: 'b.zucchi@comune.formigine.mo.it', pin: '1111', isAdmin: false },
+  { id: 'u2', name: 'Chiara Italiani', email: 'c_italiani@comune.formigine.mo.it', pin: '2222', isAdmin: false },
+  { id: 'u3', name: 'Davide Cremaschi', email: 'd.cremaschi@comune.formigine.mo.it', pin: '3333', isAdmin: false },
+  { id: 'u4', name: 'Federica Fontana', email: 'f.fontana@comune.formigine.mo.it', pin: '4444', isAdmin: false },
+  { id: 'u5', name: 'Gioacchino Battaglia', email: 'gioacchino.battaglia@comune.formigine.mo.it', pin: '7378', isAdmin: true }, // ADMIN
+  { id: 'u6', name: 'Giuseppe Carteri', email: 'g.carteri@comune.formigine.mo.it', pin: '6666', isAdmin: false },
+  { id: 'u7', name: 'Andrea Vescogni', email: 'andrea.vescogni@comune.formigine.mo.it', pin: '7777', isAdmin: false },
+  { id: 'u8', name: 'Patrizia Caselli', email: 'patrizia.caselli@comune.formigine.mo.it', pin: '8888', isAdmin: false },
+  { id: 'u9', name: 'Roberta Falchi', email: 'rfalchi@comune.formigine.mo.it', pin: '9999', isAdmin: false },
+  { id: 'u10', name: 'Roberta Palumbo', email: 'r.palumbo@comune.formigine.mo.it', pin: '1234', isAdmin: false },
+  { id: 'u11', name: 'Veronica Cantile', email: 'v.cantile@comune.formigine.mo.it', pin: '0000', isAdmin: false },
 ];
 
 const INITIAL_SETTINGS = {
@@ -72,21 +72,13 @@ const getNextOpenDay = (fromDateStr) => {
   return ALLOWED_DATES_LIST.find(d => d > todayStr) || 'Data futura non trovata';
 };
 
-const LoadingSpinner = ({ text, onForceStart }) => (
+const LoadingSpinner = ({ text }) => (
   <div className="flex flex-col items-center justify-center p-4 min-h-[300px]">
     <svg className="animate-spin -ml-1 mr-3 h-10 w-10 text-green-600 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
     </svg>
     <span className="text-gray-500 font-medium text-lg mb-4">{text || 'Caricamento sistema...'}</span>
-    {onForceStart && (
-      <button 
-        onClick={onForceStart}
-        className="text-xs text-blue-500 underline hover:text-blue-700 cursor-pointer"
-      >
-        Ci mette troppo? Clicca qui per avviare comunque (Modalità Emergenza).
-      </button>
-    )}
   </div>
 );
 
@@ -164,7 +156,7 @@ const HelpModal = ({ onClose }) => (
           <h3 className="font-bold text-orange-800 border-b border-orange-300 pb-1 mb-2">3. Funzioni Admin</h3>
           <ul className="list-disc pl-5 space-y-2 text-sm text-orange-700">
             <li>Solo l'Admin vede il pulsante <strong>"Gestione"</strong> in alto a destra.</li>
-            <li>Serve per gestire Ferie, aggiungere Utenti o cambiare Impostazioni.</li>
+            <li>Serve per gestire Ferie e cambiare Impostazioni del bar.</li>
             <li>L'Admin può <strong>sbloccare</strong> un ordine chiuso per errore.</li>
           </ul>
         </div>
@@ -225,34 +217,23 @@ const WaterIcon = ({ type, selected, hasError }) => {
 };
 
 // --- SCHERMATA LOGIN ---
-const LoginScreen = ({ onLogin, demoMode, onToggleDemo, colleagues = [], onResetDB }) => {
+const LoginScreen = ({ onLogin, demoMode, onToggleDemo }) => {
   const [selectedColleague, setSelectedColleague] = useState('');
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
-
-  const safeColleagues = Array.isArray(colleagues) ? colleagues : [];
 
   const handleLogin = () => {
     if (!selectedColleague) {
       setError('Seleziona il tuo nome dalla lista.');
       return;
     }
-    const user = safeColleagues.find(c => c.id === selectedColleague);
+    const user = COLLEAGUES_LIST.find(c => c.id === selectedColleague);
     if (user && user.pin === pin) {
       onLogin(user);
     } else {
       setError('PIN errato. Riprova.');
       setPin('');
     }
-  };
-  
-  const handleResetClick = () => {
-      const pwd = prompt("ATTENZIONE: Stai per cancellare TUTTI gli utenti e ripristinare solo Gioacchino. Inserisci password:");
-      if (pwd === DB_RESET_PASSWORD) {
-          onResetDB();
-      } else if (pwd !== null) {
-          alert("Password errata!");
-      }
   };
 
   return (
@@ -286,7 +267,7 @@ const LoginScreen = ({ onLogin, demoMode, onToggleDemo, colleagues = [], onReset
               className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none bg-white"
             >
               <option value="">-- Seleziona il tuo nome --</option>
-              {safeColleagues.map(c => (
+              {COLLEAGUES_LIST.map(c => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
@@ -318,8 +299,8 @@ const LoginScreen = ({ onLogin, demoMode, onToggleDemo, colleagues = [], onReset
           </button>
         </div>
 
-        {/* PULSANTE DEMO & RESET IN LOGIN */}
-        <div className="mt-8 pt-4 border-t flex flex-col gap-2 items-center justify-center">
+        {/* PULSANTE DEMO */}
+        <div className="mt-8 pt-4 border-t flex justify-center">
            <button 
              onClick={onToggleDemo}
              className={`text-xs font-semibold flex items-center gap-2 px-4 py-2 rounded-full transition-all shadow-sm ${
@@ -330,14 +311,6 @@ const LoginScreen = ({ onLogin, demoMode, onToggleDemo, colleagues = [], onReset
            >
              <span>{demoMode ? '✅' : '🧪'}</span> 
              {demoMode ? 'Modalità DEMO Attiva (Disattiva)' : 'Attiva Modalità DEMO (Test)'}
-           </button>
-           
-           {/* PULSANTE RESET DB */}
-           <button 
-             onClick={handleResetClick}
-             className="text-[10px] text-red-400 hover:text-red-600 underline mt-2 font-bold bg-red-50 px-2 py-1 rounded"
-           >
-             ⚠️ RIPRISTINA DB
            </button>
         </div>
       </div>
@@ -420,27 +393,16 @@ const AdminHistory = ({ db, onClose }) => {
   );
 };
 
-// --- COMPONENTE ADMIN: PANNELLO COMPLETO (Calendario, Utenti, Settings) ---
+// --- COMPONENTE ADMIN: PANNELLO COMPLETO (Calendario, Settings) ---
+// NOTA: Ho rimosso la gestione utenti dal pannello perché ora sono hardcoded per stabilità
 const AdminPanel = ({ db, currentDay, onClose }) => {
   const [activeTab, setActiveTab] = useState('calendar'); 
   const [blockedDates, setBlockedDates] = useState([]);
-  const [users, setUsers] = useState([]);
   const [settings, setSettings] = useState({ emailBar: '', phoneBar: '' });
   
-  const [newUser, setNewUser] = useState({ name: '', email: '', pin: '', isAdmin: false });
-  const [editingUser, setEditingUser] = useState(null);
-  const [saveMsg, setSaveMsg] = useState('');
-
   useEffect(() => {
     if (!db) return;
     
-    // LISTENER REALTIME PER GLI UTENTI
-    const unsubUsers = onSnapshot(collection(db, USERS_COLLECTION_PATH), (snap) => {
-        const loadedUsers = snap.docs.map(d => d.data());
-        loadedUsers.sort((a,b) => a.name.localeCompare(b.name));
-        setUsers(loadedUsers);
-    });
-
     getDoc(doc(db, CONFIG_DOC_PATH, 'holidays')).then(snap => {
         if (snap.exists()) setBlockedDates(snap.data().dates || []);
     });
@@ -448,8 +410,6 @@ const AdminPanel = ({ db, currentDay, onClose }) => {
     getDoc(doc(db, SETTINGS_DOC_PATH, 'main')).then(snap => {
         if (snap.exists()) setSettings(snap.data());
     });
-
-    return () => unsubUsers();
   }, [db]);
 
   const toggleDate = async (dateStr) => {
@@ -461,38 +421,6 @@ const AdminPanel = ({ db, currentDay, onClose }) => {
     }
     setBlockedDates(newDates);
     await setDoc(doc(db, CONFIG_DOC_PATH, 'holidays'), { dates: newDates }, { merge: true });
-  };
-
-  const addUser = async () => {
-    if (!newUser.name || !newUser.pin) return alert("Nome e PIN obbligatori");
-    setSaveMsg('Salvataggio in corso...');
-    const id = 'u_' + Date.now();
-    const userToAdd = { ...newUser, id };
-    
-    try {
-      await setDoc(doc(db, USERS_COLLECTION_PATH, id), userToAdd);
-      setNewUser({ name: '', email: '', pin: '', isAdmin: false });
-      setSaveMsg('✅ Utente salvato!');
-      setTimeout(() => setSaveMsg(''), 2000);
-    } catch (e) {
-      console.error(e);
-      setSaveMsg('❌ Errore salvataggio');
-    }
-  };
-
-  const deleteUser = async (id) => {
-    if (!confirm("Eliminare utente?")) return;
-    try {
-      await deleteDoc(doc(db, USERS_COLLECTION_PATH, id));
-    } catch (e) { console.error(e); alert("Errore eliminazione"); }
-  };
-
-  const saveEditUser = async () => {
-     if(!editingUser) return;
-     try {
-       await setDoc(doc(db, USERS_COLLECTION_PATH, editingUser.id), editingUser, {merge: true});
-       setEditingUser(null);
-     } catch (e) { console.error(e); alert("Errore modifica"); }
   };
 
   const saveSettings = async () => {
@@ -514,7 +442,6 @@ const AdminPanel = ({ db, currentDay, onClose }) => {
         
         <div className="flex border-b">
           <button onClick={() => setActiveTab('calendar')} className={`flex-1 py-3 font-bold text-sm ${activeTab === 'calendar' ? 'border-b-2 border-orange-500 text-orange-600 bg-orange-50' : 'text-gray-500 hover:bg-gray-50'}`}>📅 CALENDARIO</button>
-          <button onClick={() => setActiveTab('users')} className={`flex-1 py-3 font-bold text-sm ${activeTab === 'users' ? 'border-b-2 border-blue-500 text-blue-600 bg-blue-50' : 'text-gray-500 hover:bg-gray-50'}`}>👥 UTENTI ({users.length})</button>
           <button onClick={() => setActiveTab('settings')} className={`flex-1 py-3 font-bold text-sm ${activeTab === 'settings' ? 'border-b-2 border-gray-500 text-gray-800 bg-gray-100' : 'text-gray-500 hover:bg-gray-50'}`}>⚙️ IMPOSTAZIONI</button>
         </div>
 
@@ -537,55 +464,6 @@ const AdminPanel = ({ db, currentDay, onClose }) => {
                   )
                 })}
               </div>
-             </div>
-           )}
-
-           {activeTab === 'users' && (
-             <div className="space-y-6">
-                <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                   <h4 className="font-bold text-blue-800 mb-2 text-sm">➕ Aggiungi Nuovo Collega</h4>
-                   <div className="grid grid-cols-1 sm:grid-cols-5 gap-2">
-                      <input placeholder="Nome Cognome" className="border p-2 rounded text-sm col-span-2" value={newUser.name} onChange={e => setNewUser({...newUser, name: e.target.value})} />
-                      <input placeholder="Email" className="border p-2 rounded text-sm" value={newUser.email} onChange={e => setNewUser({...newUser, email: e.target.value})} />
-                      <input placeholder="PIN (4 cifre)" maxLength={4} className="border p-2 rounded text-sm" value={newUser.pin} onChange={e => setNewUser({...newUser, pin: e.target.value})} />
-                      <div className="flex items-center gap-2">
-                        <label className="text-xs flex items-center gap-1">
-                           <input type="checkbox" checked={newUser.isAdmin} onChange={e => setNewUser({...newUser, isAdmin: e.target.checked})} /> Admin?
-                        </label>
-                        <button onClick={addUser} className="bg-blue-600 text-white px-3 py-1 rounded text-xs font-bold flex-1">AGGIUNGI</button>
-                      </div>
-                   </div>
-                   {saveMsg && <p className="text-center text-green-600 text-xs font-bold mt-2">{saveMsg}</p>}
-                </div>
-
-                <div className="space-y-2">
-                  {users.map(u => (
-                    <div key={u.id} className="flex justify-between items-center p-2 border rounded hover:bg-gray-50">
-                       {editingUser && editingUser.id === u.id ? (
-                         <div className="flex-1 grid grid-cols-4 gap-2">
-                            <input className="border p-1 text-sm" value={editingUser.name} onChange={e => setEditingUser({...editingUser, name: e.target.value})} />
-                            <input className="border p-1 text-sm" value={editingUser.email} onChange={e => setEditingUser({...editingUser, email: e.target.value})} />
-                            <input className="border p-1 text-sm" value={editingUser.pin} onChange={e => setEditingUser({...editingUser, pin: e.target.value})} />
-                            <div className="flex gap-1">
-                              <button onClick={saveEditUser} className="bg-green-500 text-white px-2 rounded text-xs">OK</button>
-                              <button onClick={() => setEditingUser(null)} className="bg-gray-300 text-gray-700 px-2 rounded text-xs">X</button>
-                            </div>
-                         </div>
-                       ) : (
-                         <>
-                           <div>
-                             <span className="font-bold text-gray-700 block">{u.name} {u.isAdmin && "⭐"}</span>
-                             <span className="text-xs text-gray-500">{u.email} | PIN: {u.pin}</span>
-                           </div>
-                           <div className="flex gap-2">
-                              <button onClick={() => setEditingUser(u)} className="text-blue-600 text-xs hover:underline">Modifica</button>
-                              <button onClick={() => deleteUser(u.id)} className="text-red-600 text-xs hover:underline">Elimina</button>
-                           </div>
-                         </>
-                       )}
-                    </div>
-                  ))}
-                </div>
              </div>
            )}
 
@@ -616,7 +494,6 @@ const App = () => {
   const [isAuthReady, setIsAuthReady] = useState(false);
   
   // Dati dinamici
-  const [colleaguesList, setColleaguesList] = useState([]);
   const [appSettings, setAppSettings] = useState(INITIAL_SETTINGS);
   const [dataLoaded, setDataLoaded] = useState(false); 
 
@@ -655,48 +532,14 @@ const App = () => {
   const hour = demoMode ? 10 : time.getHours();
   const minute = demoMode ? 0 : time.getMinutes();
 
+  // LOGICA ORARIA
   const isLateWarning = (hour === 10 && minute >= 30) || (hour === 11);
   const isBookingClosed = hour >= 12;
   const isEmailClosed = hour >= 13;
 
+  // FORZATURA MANUALE
   const forceStart = () => {
     setInitTimeout(true);
-  };
-
-  const handleHardReset = async () => {
-      if(!db) return;
-      setLoading(true);
-      try {
-        const usersRef = collection(db, USERS_COLLECTION_PATH);
-        const snap = await getDocs(usersRef);
-        const batch = writeBatch(db);
-
-        // 1. Delete
-        snap.docs.forEach(doc => {
-            batch.delete(doc.ref);
-        });
-
-        // 2. Seed Admin
-        const adminRef = doc(usersRef, INITIAL_ADMIN.id);
-        batch.set(adminRef, INITIAL_ADMIN);
-
-        // 3. Reset settings
-        const settingsRef = doc(db, SETTINGS_DOC_PATH, 'main');
-        batch.set(settingsRef, INITIAL_SETTINGS);
-
-        await batch.commit();
-        
-        // FORCE RELOAD IN LOCAL STATE (così l'UI si aggiorna subito)
-        setColleaguesList([INITIAL_ADMIN]);
-        setAppSettings(INITIAL_SETTINGS);
-        
-        alert("Database resettato! Utenti cancellati. È rimasto solo l'Admin.");
-        setLoading(false);
-      } catch (e) {
-        console.error(e);
-        alert(`Errore durante il reset: ${e.message}`);
-        setLoading(false);
-      }
   };
 
   // 1. INIT FIREBASE & LOAD
@@ -715,17 +558,11 @@ const App = () => {
       setAuth(authInstance);
 
       const subscribeToData = () => {
-         const unsubUsers = onSnapshot(collection(dbInstance, USERS_COLLECTION_PATH), (snap) => {
-            const loadedUsers = snap.docs.map(d => d.data());
-            setColleaguesList(loadedUsers);
-            setDataLoaded(true);
-         });
-
          const unsubSettings = onSnapshot(doc(dbInstance, SETTINGS_DOC_PATH, 'main'), (snap) => {
             if (snap.exists()) setAppSettings(snap.data());
          });
          
-         return () => { unsubUsers(); unsubSettings(); };
+         return () => { unsubSettings(); };
       };
 
       const checkDateAccess = async () => {
@@ -761,9 +598,11 @@ const App = () => {
         }
       };
 
+      // Sequenza di avvio
       initAuth().then(() => {
         subscribeToData();
         checkDateAccess();
+        setDataLoaded(true); // Caricamento completato (utenti fissi)
       });
 
       onAuthStateChanged(authInstance, (u) => {
@@ -785,9 +624,9 @@ const App = () => {
     return () => clearTimeout(timeoutId);
   }, [demoMode]);
 
+  // Forzatura manuale caricamento
   useEffect(() => {
     if (initTimeout && loading) {
-      setColleaguesList([INITIAL_ADMIN]);
       setAppSettings(INITIAL_SETTINGS);
       setDataLoaded(true);
       setIsAuthReady(true);
@@ -795,18 +634,19 @@ const App = () => {
     }
   }, [initTimeout, loading]);
 
+  // Restore user session
   useEffect(() => {
       if (dataLoaded && isAuthReady && !user) {
           const savedUserId = sessionStorage.getItem('mealAppUser');
           if (savedUserId) {
-            const found = colleaguesList.find(c => c.id === savedUserId);
+            const found = COLLEAGUES_LIST.find(c => c.id === savedUserId);
             if (found) {
                setUser(found);
                setActingAsUser(found); 
             }
           }
       }
-  }, [dataLoaded, isAuthReady, colleaguesList]);
+  }, [dataLoaded, isAuthReady]);
 
   // LISTENER ORDINI
   useEffect(() => {
@@ -838,6 +678,8 @@ const App = () => {
         setOrderStatus('open');
         setOrderAuthor('');
       }
+    }, (err) => {
+      console.error("Errore listener ordini:", err);
     });
 
     return () => unsubscribe();
@@ -860,7 +702,7 @@ const App = () => {
 
   const handleAdminUserChange = (e) => {
       const targetId = e.target.value;
-      const targetUser = colleaguesList.find(c => c.id === targetId);
+      const targetUser = COLLEAGUES_LIST.find(c => c.id === targetId);
       if (targetUser) {
           setActingAsUser(targetUser);
           setMessage(''); 
@@ -868,7 +710,7 @@ const App = () => {
   };
 
   const adminEditOrder = (targetUserId) => {
-      const targetUser = colleaguesList.find(c => c.id === targetUserId);
+      const targetUser = COLLEAGUES_LIST.find(c => c.id === targetUserId);
       if(targetUser) setActingAsUser(targetUser);
   };
 
@@ -956,7 +798,7 @@ const App = () => {
   };
 
   const getAllEmails = () => {
-    return colleaguesList
+    return COLLEAGUES_LIST
       .map(c => c.email)
       .filter(email => email && email.includes('@'))
       .join(',');
@@ -1032,7 +874,7 @@ const App = () => {
   if (loading || !dataLoaded) return <div className="min-h-screen flex items-center justify-center"><LoadingSpinner text="Connessione al database..." onForceStart={forceStart} /></div>;
 
   if (!isShopOpen && !demoMode) return <ClosedScreen nextDate={getNextOpenDay(todayStr)} onEnableDemo={() => { setDemoMode(true); setIsShopOpen(true); }} />;
-  if (!user) return <LoginScreen onLogin={handleLogin} demoMode={demoMode} onToggleDemo={() => setDemoMode(prev => !prev)} colleagues={colleaguesList} onResetDB={handleHardReset} />;
+  if (!user) return <LoginScreen onLogin={handleLogin} demoMode={demoMode} onToggleDemo={() => setDemoMode(prev => !prev)} colleagues={COLLEAGUES_LIST} />;
 
   const barOrders = orders.filter(o => !o.isTakeout);
   const takeoutOrders = orders.filter(o => o.isTakeout);
@@ -1194,7 +1036,7 @@ const App = () => {
                         onChange={handleAdminUserChange}
                         className="w-full p-2 text-sm border border-orange-300 rounded bg-white focus:ring-2 focus:ring-orange-500 outline-none"
                     >
-                        {colleaguesList.map(c => (
+                        {COLLEAGUES_LIST.map(c => (
                             <option key={c.id} value={c.id}>
                                 {c.id === user.id ? 'Me Stesso' : c.name}
                             </option>
