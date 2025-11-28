@@ -26,7 +26,7 @@ const SETTINGS_DOC_PATH = `${PUBLIC_DATA_PATH}/settings`;
 const BANNER_IMAGE_URL = "https://images.unsplash.com/photo-1559339352-11d035aa65de?q=80&w=2074&auto=format&fit=crop"; 
 
 // --- 👥 LISTA COLLEGHI UFFICIALE (GESTITA DA CODICE) ---
-// Modifica qui sotto per aggiungere/rimuovere colleghi o cambiare PIN.
+// ID devono essere stabili per contare i buoni correttamente
 const COLLEAGUES_LIST = [
   { id: 'u1', name: 'Barbara Zucchi', email: 'b.zucchi@comune.formigine.mo.it', pin: '1111', isAdmin: false },
   { id: 'u2', name: 'Chiara Italiani', email: 'c_italiani@comune.formigine.mo.it', pin: '2222', isAdmin: false },
@@ -76,66 +76,36 @@ const getNextOpenDay = (fromDateStr) => {
   return ALLOWED_DATES_LIST.find(d => d > todayStr) || 'Data futura non trovata';
 };
 
-// Calcolo giorni rimanenti demo
 const getDaysLeft = () => {
   const now = new Date();
   const diff = DEMO_EXPIRATION_DATE - now;
   return Math.ceil(diff / (1000 * 60 * 60 * 24)); 
 };
 
-const LoadingSpinner = ({ text, onForceStart }) => (
+// --- HELPER EXPORT CSV ---
+const downloadCSV = (content, filename) => {
+    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+};
+
+const LoadingSpinner = ({ text }) => (
   <div className="flex flex-col items-center justify-center p-4 min-h-[300px]">
     <svg className="animate-spin -ml-1 mr-3 h-10 w-10 text-green-600 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
     </svg>
     <span className="text-gray-500 font-medium text-lg mb-4">{text || 'Caricamento sistema...'}</span>
-    {onForceStart && (
-      <button onClick={onForceStart} className="text-xs text-blue-500 underline hover:text-blue-700">
-        Sblocca caricamento
-      </button>
-    )}
   </div>
 );
 
 // --- COMPONENTI UI ---
-
-const ClosedScreen = ({ nextDate, onEnableDemo }) => {
-  const nextDateObj = new Date(nextDate);
-  const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-  const formattedNext = nextDateObj.toLocaleDateString('it-IT', options);
-
-  return (
-    <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
-      <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-lg text-center border-t-8 border-gray-400">
-        <div className="mb-6 text-gray-300">
-          <svg className="w-20 h-20 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-        </div>
-        <h1 className="text-3xl font-extrabold text-gray-800 mb-2">Oggi siamo chiusi</h1>
-        <p className="text-gray-600 mb-6">
-          Il servizio prenotazione è attivo solo il <strong>Lunedì</strong> e il <strong>Giovedì</strong>.
-        </p>
-        
-        <div className="bg-green-50 p-4 rounded-lg border border-green-200 inline-block w-full mb-6">
-          <p className="text-sm text-green-800 font-bold uppercase tracking-wider mb-1">Prossima Apertura</p>
-          <p className="text-2xl text-green-900 font-serif capitalize">{formattedNext}</p>
-        </div>
-
-        <div className="border-t pt-4">
-          <p className="text-xs text-gray-500 mb-2">Devi fare una prova tecnica?</p>
-          <button 
-            onClick={onEnableDemo}
-            className="bg-purple-100 hover:bg-purple-200 text-purple-700 text-sm font-bold py-2 px-4 rounded-full transition-colors flex items-center justify-center gap-2 mx-auto"
-          >
-            <span>🧪</span> Attiva Modalità DEMO
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
 
 const HelpModal = ({ onClose }) => (
   <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm" onClick={onClose}>
@@ -151,9 +121,7 @@ const HelpModal = ({ onClose }) => (
           <h3 className="font-bold text-gray-800 border-b pb-1 mb-2">1. Come Ordinare</h3>
           <ul className="list-disc pl-5 space-y-2 text-sm text-gray-600">
             <li>Il sistema apre solo il <strong>Lunedì</strong> e <strong>Giovedì</strong>.</li>
-            <li>Scrivi il piatto, scegli l'acqua e se mangi al bar o asporto.</li>
-            <li>Clicca <strong>"Salva la tua scelta"</strong>.</li>
-            <li>Tutti possono vedere la tua scelta nella lista a destra.</li>
+            <li>Se entri in altri giorni, potrai solo consultare lo storico e i buoni.</li>
           </ul>
         </div>
 
@@ -250,7 +218,6 @@ const LoginScreen = ({ onLogin, demoMode, onToggleDemo, colleagues = [] }) => {
     <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
       <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border-t-8 border-green-700 relative">
         <div className="text-center mb-8">
-          {/* ICONA BAR VERDE */}
           <div className="flex justify-center mb-2">
             <div className="p-3 bg-green-50 rounded-full shadow-sm">
              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-12 h-12 text-green-700">
@@ -359,6 +326,7 @@ const UserStatsModal = ({ db, user, onClose }) => {
         querySnapshot.forEach((doc) => {
             const data = doc.data();
             const myOrder = (data.orders || []).find(o => o.userId === user.id);
+            // NOTA: Contiamo anche gli ordini DEMO, come richiesto
             if (myOrder) {
                 ordersFound.push({
                     date: data.mealDate,
@@ -383,6 +351,15 @@ const UserStatsModal = ({ db, user, onClose }) => {
     loadStats();
   }, [selectedMonth]);
 
+  // Export CSV per singolo utente
+  const handleExport = () => {
+      let csv = "Data,Piatto,Tipo\n";
+      userStats.forEach(row => {
+          csv += `${row.date},"${row.item}",${row.type}\n`;
+      });
+      downloadCSV(csv, `Buoni_${user.name}_${selectedMonth}.csv`);
+  };
+
   return (
     <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
       <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 relative h-[80vh] flex flex-col">
@@ -401,6 +378,12 @@ const UserStatsModal = ({ db, user, onClose }) => {
                 <span className="text-4xl font-bold text-blue-700 block">{totalMeals}</span>
                 <span className="text-xs text-blue-500 uppercase font-bold">Buoni Consumati</span>
             </div>
+        </div>
+
+        <div className="flex justify-end mb-2">
+            <button onClick={handleExport} className="text-xs bg-green-100 text-green-700 px-3 py-1 rounded font-bold hover:bg-green-200 flex items-center gap-1">
+                📥 Scarica Excel/CSV
+            </button>
         </div>
 
         <div className="flex-1 overflow-y-auto border-t border-gray-100 pt-2">
@@ -534,6 +517,12 @@ const AdminPanel = ({ db, currentDay, onClose, colleaguesList }) => {
   const [activeTab, setActiveTab] = useState('calendar'); 
   const [blockedDates, setBlockedDates] = useState([]);
   const [settings, setSettings] = useState({ emailBar: '', phoneBar: '' });
+  
+  // Report
+  const [reportMonth, setReportMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [reportData, setReportData] = useState([]);
+  const [loadingReport, setLoadingReport] = useState(false);
+  const [totalReportMeals, setTotalReportMeals] = useState(0);
 
   useEffect(() => {
     if (!db) return;
@@ -546,6 +535,68 @@ const AdminPanel = ({ db, currentDay, onClose, colleaguesList }) => {
         if (snap.exists()) setSettings(snap.data());
     });
   }, [db]);
+
+  // Load report on tab change
+  useEffect(() => {
+      if (activeTab === 'vouchers') loadVoucherReport();
+  }, [activeTab, reportMonth]);
+
+  const loadVoucherReport = async () => {
+    setLoadingReport(true);
+    const [year, month] = reportMonth.split('-');
+    const startDate = `${year}-${month}-01`;
+    const lastDay = new Date(year, month, 0).getDate();
+    const endDate = `${year}-${month}-${lastDay}`;
+
+    try {
+        const q = query(
+            collection(db, PUBLIC_ORDERS_COLLECTION),
+            where('mealDate', '>=', startDate),
+            where('mealDate', '<=', endDate)
+        );
+        const querySnapshot = await getDocs(q);
+        
+        const counts = {};
+        let total = 0;
+
+        // Init counts
+        COLLEAGUES_LIST.forEach(c => {
+            counts[c.id] = { name: c.name, count: 0 };
+        });
+
+        querySnapshot.forEach((doc) => {
+            const data = doc.data();
+            const dayOrders = data.orders || [];
+            dayOrders.forEach(order => {
+                if (counts[order.userId]) {
+                    counts[order.userId].count++;
+                    total++;
+                } else {
+                    // Fallback se utente rimosso dalla lista statica
+                    counts[order.userId] = { name: order.userName || 'Sconosciuto', count: 1 };
+                    total++;
+                }
+            });
+        });
+
+        const reportArray = Object.values(counts).sort((a, b) => a.name.localeCompare(b.name));
+        setReportData(reportArray);
+        setTotalReportMeals(total);
+
+    } catch (e) {
+        console.error("Errore report:", e);
+    }
+    setLoadingReport(false);
+  };
+
+  const exportReportCSV = () => {
+      let csv = "Nome Collega,Buoni Consumati\n";
+      reportData.forEach(row => {
+          csv += `"${row.name}",${row.count}\n`;
+      });
+      csv += `TOTALE,${totalReportMeals}\n`;
+      downloadCSV(csv, `Report_Buoni_${reportMonth}.csv`);
+  };
 
   const toggleDate = async (dateStr) => {
     let newDates = [];
@@ -575,10 +626,11 @@ const AdminPanel = ({ db, currentDay, onClose, colleaguesList }) => {
            <button onClick={onClose} className="text-gray-500 hover:text-red-600 font-bold text-xl">&times;</button>
         </div>
         
-        <div className="flex border-b">
-          <button onClick={() => setActiveTab('calendar')} className={`flex-1 py-3 font-bold text-sm ${activeTab === 'calendar' ? 'border-b-2 border-orange-500 text-orange-600 bg-orange-50' : 'text-gray-500 hover:bg-gray-50'}`}>📅 CALENDARIO</button>
-          <button onClick={() => setActiveTab('users')} className={`flex-1 py-3 font-bold text-sm ${activeTab === 'users' ? 'border-b-2 border-blue-500 text-blue-600 bg-blue-50' : 'text-gray-500 hover:bg-gray-50'}`}>👥 UTENTI</button>
-          <button onClick={() => setActiveTab('settings')} className={`flex-1 py-3 font-bold text-sm ${activeTab === 'settings' ? 'border-b-2 border-gray-500 text-gray-800 bg-gray-100' : 'text-gray-500 hover:bg-gray-50'}`}>⚙️ IMPOSTAZIONI</button>
+        <div className="flex border-b overflow-x-auto">
+          <button onClick={() => setActiveTab('calendar')} className={`flex-1 py-3 font-bold text-sm px-4 whitespace-nowrap ${activeTab === 'calendar' ? 'border-b-2 border-orange-500 text-orange-600 bg-orange-50' : 'text-gray-500 hover:bg-gray-50'}`}>📅 CALENDARIO</button>
+          <button onClick={() => setActiveTab('vouchers')} className={`flex-1 py-3 font-bold text-sm px-4 whitespace-nowrap ${activeTab === 'vouchers' ? 'border-b-2 border-green-500 text-green-600 bg-green-50' : 'text-gray-500 hover:bg-gray-50'}`}>📊 REPORT BUONI</button>
+          <button onClick={() => setActiveTab('users')} className={`flex-1 py-3 font-bold text-sm px-4 whitespace-nowrap ${activeTab === 'users' ? 'border-b-2 border-blue-500 text-blue-600 bg-blue-50' : 'text-gray-500 hover:bg-gray-50'}`}>👥 UTENTI</button>
+          <button onClick={() => setActiveTab('settings')} className={`flex-1 py-3 font-bold text-sm px-4 whitespace-nowrap ${activeTab === 'settings' ? 'border-b-2 border-gray-500 text-gray-800 bg-gray-100' : 'text-gray-500 hover:bg-gray-50'}`}>⚙️ IMPOSTAZIONI</button>
         </div>
 
         <div className="p-6 overflow-y-auto flex-1">
@@ -600,6 +652,55 @@ const AdminPanel = ({ db, currentDay, onClose, colleaguesList }) => {
                   )
                 })}
               </div>
+             </div>
+           )}
+
+           {activeTab === 'vouchers' && (
+             <div className="space-y-4">
+                <div className="bg-green-50 p-4 rounded-lg border border-green-100 flex justify-between items-center">
+                   <div>
+                     <label className="block text-xs font-bold text-green-800 uppercase mb-1">Periodo Report</label>
+                     <input 
+                        type="month" 
+                        value={reportMonth} 
+                        onChange={(e) => setReportMonth(e.target.value)} 
+                        className="border p-2 rounded font-bold text-gray-700"
+                     />
+                   </div>
+                   <div className="text-right">
+                      <span className="block text-3xl font-bold text-green-700">{totalReportMeals}</span>
+                      <span className="text-xs text-green-600 uppercase font-bold">Totale Pasti</span>
+                   </div>
+                </div>
+                
+                <div className="flex justify-end">
+                    <button onClick={exportReportCSV} className="text-xs bg-blue-100 text-blue-700 px-3 py-1 rounded font-bold hover:bg-blue-200 flex items-center gap-1">
+                        📥 Scarica Report CSV
+                    </button>
+                </div>
+
+                {loadingReport ? (
+                    <p className="text-center text-gray-400 py-8">Calcolo report in corso...</p>
+                ) : (
+                    <div className="border rounded overflow-hidden">
+                        <table className="w-full text-sm text-left">
+                            <thead className="bg-gray-100 text-gray-600 uppercase text-xs">
+                                <tr>
+                                    <th className="p-3">Collega</th>
+                                    <th className="p-3 text-right">Buoni Usati</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y">
+                                {reportData.map(user => (
+                                    <tr key={user.name} className="hover:bg-gray-50">
+                                        <td className="p-3 font-medium text-gray-800">{user.name}</td>
+                                        <td className="p-3 text-right font-bold text-blue-600">{user.count}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
              </div>
            )}
 
@@ -640,7 +741,7 @@ const App = () => {
   const [isAuthReady, setIsAuthReady] = useState(false);
   
   // Dati dinamici
-  const [colleaguesList, setColleaguesList] = useState(COLLEAGUES_LIST); // USIAMO LA LISTA STATICA
+  const [colleaguesList, setColleaguesList] = useState(COLLEAGUES_LIST); 
   const [appSettings, setAppSettings] = useState(INITIAL_SETTINGS);
   const [dataLoaded, setDataLoaded] = useState(false); 
 
@@ -685,7 +786,7 @@ const App = () => {
   const isBookingClosed = hour >= 12;
   const isEmailClosed = hour >= 13;
 
-  // FORZATURA MANUALE (DEFINITA PRIMA DELL'USO)
+  // FORZATURA MANUALE
   const forceStart = () => {
     setInitTimeout(true);
   };
@@ -717,7 +818,7 @@ const App = () => {
         const isBaseValid = ALLOWED_DATES_LIST.includes(todayStr);
         if (!isBaseValid && !demoMode) { 
           setIsShopOpen(false);
-          // NON blocchiamo il loading qui, permettiamo di renderizzare ClosedScreen
+          // NON blocchiamo il loading qui, permettiamo il rendering per fare login
           setLoading(false);
           return;
         }
@@ -751,7 +852,7 @@ const App = () => {
       initAuth().then(() => {
         subscribeToData();
         checkDateAccess();
-        setDataLoaded(true); // Caricamento completato (utenti fissi)
+        setDataLoaded(true);
       });
 
       onAuthStateChanged(authInstance, (u) => {
@@ -776,7 +877,6 @@ const App = () => {
   // Forzatura manuale caricamento
   useEffect(() => {
     if (initTimeout && loading) {
-      console.warn("Timeout caricamento: forzo avvio con dati locali.");
       setAppSettings(INITIAL_SETTINGS);
       setDataLoaded(true);
       setIsAuthReady(true);
@@ -800,8 +900,11 @@ const App = () => {
 
   // LISTENER ORDINI
   useEffect(() => {
-    if (!db || !isAuthReady || (!isShopOpen && !demoMode)) return;
+    if (!db || !isAuthReady) return;
     
+    // Se chiuso/no demo, ascoltiamo comunque per lo storico ma non è critico.
+    // Qui carichiamo l'ordine del giorno CORRENTE (anche se chiuso).
+    // Questo serve per vedere se c'è un ordine attivo o meno.
     const docRef = doc(db, PUBLIC_ORDERS_COLLECTION, todayStr);
     
     const unsubscribe = onSnapshot(docRef, (docSnap) => {
@@ -857,6 +960,19 @@ const App = () => {
           setActingAsUser(targetUser);
           setMessage(''); 
       }
+  };
+
+  const adminEditOrder = (targetUserId) => {
+      const targetUser = COLLEAGUES_LIST.find(c => c.id === targetUserId);
+      if(targetUser) setActingAsUser(targetUser);
+  };
+
+  const adminDeleteOrder = async (targetUserId) => {
+      if (!confirm("Sei sicuro di voler eliminare questo ordine?")) return;
+      try {
+        const orderRef = doc(db, PUBLIC_ORDERS_COLLECTION, todayStr);
+        await updateDoc(orderRef, { orders: orders.filter(o => o.userId !== targetUserId) });
+      } catch(e) { console.error(e); }
   };
 
   const placeOrder = async () => {
@@ -1011,29 +1127,14 @@ const App = () => {
 
   if (loading || !dataLoaded) return <div className="min-h-screen flex items-center justify-center"><LoadingSpinner text="Connessione al database..." onForceStart={forceStart} /></div>;
 
-  // LOGICA DI ACCESSO: Se chiuso/non demo, permettiamo login SOLO per consultazione.
-  // Se loggato (user != null), mostriamo l'app ma con restrizioni UI (isClosedView)
-  // Se non loggato, mostriamo ClosedScreen.
-
-  if (!isShopOpen && !demoMode) {
-      if (!user) {
-          // Se non è loggato e il negozio è chiuso, mostra schermata chiusura MA CON TASTO LOGIN NASCOSTO
-          // Aspetta, l'utente ha chiesto di poter entrare per vedere lo storico.
-          // Quindi dobbiamo mostrare la LoginScreen invece della ClosedScreen se vuole entrare?
-          // O mettiamo un tasto "Entra per consultare" nella ClosedScreen?
-          // Mettiamo un tasto "Accedi per consultazione" nella ClosedScreen
-          return <ClosedScreen nextDate={getNextOpenDay(todayStr)} onEnableDemo={() => { setDemoMode(true); setIsShopOpen(true); }} />;
-          // NOTA: Per semplicità, la ClosedScreen attuale ha solo il tasto Demo.
-          // Modifichiamo ClosedScreen per avere "Area Personale"
-      }
-  }
-  
+  // --- LOGICA ACCESSO: Login sempre permesso ---
   if (!user) return <LoginScreen onLogin={handleLogin} demoMode={demoMode} onToggleDemo={() => setDemoMode(prev => !prev)} colleagues={COLLEAGUES_LIST} />;
 
   const barOrders = orders.filter(o => !o.isTakeout);
   const takeoutOrders = orders.filter(o => o.isTakeout);
 
-  // SE CHIUSO E NON DEMO: DISABILITA INPUT MA MOSTRA UI
+  // --- LOGICA VISTA CHIUSA ---
+  // Se il negozio è chiuso e non siamo in demo mode, mostriamo la dashboard ma con il pannello "Oggi Riposo"
   const isClosedView = (!isShopOpen && !demoMode);
 
   return (
@@ -1090,7 +1191,7 @@ const App = () => {
 
         {/* MODALI */}
         {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
-        {showAdminPanel && <AdminPanel db={db} currentDay={todayStr} onClose={() => setShowAdminPanel(false)} colleaguesList={colleaguesList} />}
+        {showAdminPanel && <AdminPanel db={db} currentDay={todayStr} onClose={() => setShowAdminPanel(false)} colleaguesList={COLLEAGUES_LIST} />}
         {showHistory && <AdminHistory db={db} onClose={() => setShowHistory(false)} user={user} />}
         {showUserStats && <UserStatsModal db={db} user={user} onClose={() => setShowUserStats(false)} />}
 
