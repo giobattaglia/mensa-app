@@ -25,7 +25,7 @@ const SETTINGS_DOC_PATH = `${PUBLIC_DATA_PATH}/settings`;
 
 const BANNER_IMAGE_URL = "https://images.unsplash.com/photo-1559339352-11d035aa65de?q=80&w=2074&auto=format&fit=crop"; 
 
-// --- 👥 LISTA COLLEGHI UFFICIALE ---
+// --- 👥 LISTA COLLEGHI UFFICIALE (GESTITA DA CODICE) ---
 const COLLEAGUES_LIST = [
   { id: 'u1', name: 'Barbara Zucchi', email: 'b.zucchi@comune.formigine.mo.it', pin: '1111', isAdmin: false },
   { id: 'u2', name: 'Chiara Italiani', email: 'c_italiani@comune.formigine.mo.it', pin: '2222', isAdmin: false },
@@ -49,7 +49,10 @@ const INITIAL_SETTINGS = {
 const DEMO_EXPIRATION_DATE = new Date('2025-12-31');
 
 // --- UTILITÀ CALENDARIO ---
-const formatDate = (date) => date.toISOString().split('T')[0];
+const formatDate = (date) => {
+    if (!date) return '';
+    return date.toISOString().split('T')[0];
+};
 
 const generateAllowedDates = () => {
   const dates = [];
@@ -72,7 +75,8 @@ const ALLOWED_DATES_LIST = generateAllowedDates();
 
 const getNextOpenDay = (fromDateStr) => {
   const todayStr = fromDateStr || formatDate(new Date());
-  return ALLOWED_DATES_LIST.find(d => d > todayStr) || 'Data futura non trovata';
+  const found = ALLOWED_DATES_LIST.find(d => d > todayStr);
+  return found || null;
 };
 
 const getDaysLeft = () => {
@@ -81,29 +85,69 @@ const getDaysLeft = () => {
   return Math.ceil(diff / (1000 * 60 * 60 * 24)); 
 };
 
-const downloadCSV = (content, filename) => {
-    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', filename);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-};
-
-const LoadingSpinner = ({ text }) => (
+const LoadingSpinner = ({ text, onForceStart }) => (
   <div className="flex flex-col items-center justify-center p-4 min-h-[300px]">
     <svg className="animate-spin -ml-1 mr-3 h-10 w-10 text-green-600 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
     </svg>
     <span className="text-gray-500 font-medium text-lg mb-4">{text || 'Caricamento sistema...'}</span>
+    {onForceStart && (
+      <button 
+        onClick={onForceStart}
+        className="text-xs text-blue-500 underline hover:text-blue-700 cursor-pointer"
+      >
+        Ci mette troppo? Clicca qui per avviare comunque.
+      </button>
+    )}
   </div>
 );
 
 // --- COMPONENTI UI ---
+
+const ClosedScreen = ({ nextDate, onEnableDemo }) => {
+  let formattedNext = "Presto";
+  if (nextDate) {
+      try {
+        const nextDateObj = new Date(nextDate);
+        const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+        formattedNext = nextDateObj.toLocaleDateString('it-IT', options);
+      } catch (e) {
+          formattedNext = nextDate;
+      }
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
+      <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-lg text-center border-t-8 border-gray-400">
+        <div className="mb-6 text-gray-300">
+          <svg className="w-20 h-20 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+        <h1 className="text-3xl font-extrabold text-gray-800 mb-2">Oggi siamo chiusi</h1>
+        <p className="text-gray-600 mb-6">
+          Il servizio prenotazione è attivo solo il <strong>Lunedì</strong> e il <strong>Giovedì</strong>.
+        </p>
+        
+        <div className="bg-green-50 p-4 rounded-lg border border-green-200 inline-block w-full mb-6">
+          <p className="text-sm text-green-800 font-bold uppercase tracking-wider mb-1">Prossima Apertura</p>
+          <p className="text-2xl text-green-900 font-serif capitalize">{formattedNext}</p>
+        </div>
+
+        <div className="border-t pt-4">
+          <p className="text-xs text-gray-500 mb-2">Devi fare una prova tecnica?</p>
+          <button 
+            onClick={onEnableDemo}
+            className="bg-purple-100 hover:bg-purple-200 text-purple-700 text-sm font-bold py-2 px-4 rounded-full transition-colors flex items-center justify-center gap-2 mx-auto"
+          >
+            <span>🧪</span> Attiva Modalità DEMO
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const HelpModal = ({ onClose }) => (
   <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm" onClick={onClose}>
@@ -329,7 +373,7 @@ const AdminHistory = ({ db, onClose, user }) => {
 
   const deleteDay = async () => {
       if (!user.isAdmin) return;
-      if (!confirm(`Sei SICURO di voler cancellare TUTTI gli ordini del ${selectedDate}? Questa azione è irreversibile.`)) return;
+      if (!confirm(`Sei SICURO di voler cancellare TUTTI gli ordini del ${selectedDate}? Questa azione è irreversibile e rimuoverà i buoni dal conteggio.`)) return;
       
       try {
           await deleteDoc(doc(db, PUBLIC_ORDERS_COLLECTION, selectedDate));
@@ -405,12 +449,6 @@ const AdminPanel = ({ db, currentDay, onClose, colleaguesList }) => {
   const [blockedDates, setBlockedDates] = useState([]);
   const [settings, setSettings] = useState({ emailBar: '', phoneBar: '' });
   
-  // Report
-  const [reportMonth, setReportMonth] = useState(new Date().toISOString().slice(0, 7));
-  const [reportData, setReportData] = useState([]);
-  const [loadingReport, setLoadingReport] = useState(false);
-  const [totalReportMeals, setTotalReportMeals] = useState(0);
-
   useEffect(() => {
     if (!db) return;
     
@@ -422,71 +460,6 @@ const AdminPanel = ({ db, currentDay, onClose, colleaguesList }) => {
         if (snap.exists()) setSettings(snap.data());
     });
   }, [db]);
-
-  // Load report on tab change
-  useEffect(() => {
-      if (activeTab === 'vouchers') loadVoucherReport();
-  }, [activeTab, reportMonth]);
-
-  const loadVoucherReport = async () => {
-    setLoadingReport(true);
-    const [year, month] = reportMonth.split('-');
-    const startDate = `${year}-${month}-01`;
-    const lastDay = new Date(year, month, 0).getDate();
-    const endDate = `${year}-${month}-${lastDay}`;
-
-    try {
-        const q = query(
-            collection(db, PUBLIC_ORDERS_COLLECTION),
-            where('mealDate', '>=', startDate),
-            where('mealDate', '<=', endDate)
-        );
-        const querySnapshot = await getDocs(q);
-        
-        const counts = {};
-        let total = 0;
-
-        // Init counts
-        COLLEAGUES_LIST.forEach(c => {
-            counts[c.id] = { name: c.name, count: 0 };
-        });
-
-        querySnapshot.forEach((doc) => {
-            const data = doc.data();
-            // CONTA SOLO SE INVIATO
-            if (data.status === 'sent') {
-                const dayOrders = data.orders || [];
-                dayOrders.forEach(order => {
-                    if (counts[order.userId]) {
-                        counts[order.userId].count++;
-                        total++;
-                    } else {
-                        // Fallback se utente rimosso dalla lista statica
-                        counts[order.userId] = { name: order.userName || 'Sconosciuto', count: 1 };
-                        total++;
-                    }
-                });
-            }
-        });
-
-        const reportArray = Object.values(counts).sort((a, b) => a.name.localeCompare(b.name));
-        setReportData(reportArray);
-        setTotalReportMeals(total);
-
-    } catch (e) {
-        console.error("Errore report:", e);
-    }
-    setLoadingReport(false);
-  };
-
-  const exportReportCSV = () => {
-      let csv = "Nome Collega,Buoni Consumati\n";
-      reportData.forEach(row => {
-          csv += `"${row.name}",${row.count}\n`;
-      });
-      csv += `TOTALE,${totalReportMeals}\n`;
-      downloadCSV(csv, `Report_Buoni_${reportMonth}.csv`);
-  };
 
   const toggleDate = async (dateStr) => {
     let newDates = [];
@@ -518,7 +491,6 @@ const AdminPanel = ({ db, currentDay, onClose, colleaguesList }) => {
         
         <div className="flex border-b overflow-x-auto">
           <button onClick={() => setActiveTab('calendar')} className={`flex-1 py-3 font-bold text-sm px-4 whitespace-nowrap ${activeTab === 'calendar' ? 'border-b-2 border-orange-500 text-orange-600 bg-orange-50' : 'text-gray-500 hover:bg-gray-50'}`}>📅 CALENDARIO</button>
-          <button onClick={() => setActiveTab('vouchers')} className={`flex-1 py-3 font-bold text-sm px-4 whitespace-nowrap ${activeTab === 'vouchers' ? 'border-b-2 border-green-500 text-green-600 bg-green-50' : 'text-gray-500 hover:bg-gray-50'}`}>📊 REPORT BUONI</button>
           <button onClick={() => setActiveTab('users')} className={`flex-1 py-3 font-bold text-sm px-4 whitespace-nowrap ${activeTab === 'users' ? 'border-b-2 border-blue-500 text-blue-600 bg-blue-50' : 'text-gray-500 hover:bg-gray-50'}`}>👥 UTENTI</button>
           <button onClick={() => setActiveTab('settings')} className={`flex-1 py-3 font-bold text-sm px-4 whitespace-nowrap ${activeTab === 'settings' ? 'border-b-2 border-gray-500 text-gray-800 bg-gray-100' : 'text-gray-500 hover:bg-gray-50'}`}>⚙️ IMPOSTAZIONI</button>
         </div>
@@ -542,55 +514,6 @@ const AdminPanel = ({ db, currentDay, onClose, colleaguesList }) => {
                   )
                 })}
               </div>
-             </div>
-           )}
-
-           {activeTab === 'vouchers' && (
-             <div className="space-y-4">
-                <div className="bg-green-50 p-4 rounded-lg border border-green-100 flex justify-between items-center">
-                   <div>
-                     <label className="block text-xs font-bold text-green-800 uppercase mb-1">Periodo Report</label>
-                     <input 
-                        type="month" 
-                        value={reportMonth} 
-                        onChange={(e) => setReportMonth(e.target.value)} 
-                        className="border p-2 rounded font-bold text-gray-700"
-                     />
-                   </div>
-                   <div className="text-right">
-                      <span className="block text-3xl font-bold text-green-700">{totalReportMeals}</span>
-                      <span className="text-xs text-green-600 uppercase font-bold">Totale Pasti (Confermati)</span>
-                   </div>
-                </div>
-                
-                <div className="flex justify-end">
-                    <button onClick={exportReportCSV} className="text-xs bg-blue-100 text-blue-700 px-3 py-1 rounded font-bold hover:bg-blue-200 flex items-center gap-1">
-                        📥 Scarica Report CSV
-                    </button>
-                </div>
-
-                {loadingReport ? (
-                    <p className="text-center text-gray-400 py-8">Calcolo report in corso...</p>
-                ) : (
-                    <div className="border rounded overflow-hidden">
-                        <table className="w-full text-sm text-left">
-                            <thead className="bg-gray-100 text-gray-600 uppercase text-xs">
-                                <tr>
-                                    <th className="p-3">Collega</th>
-                                    <th className="p-3 text-right">Buoni Usati</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y">
-                                {reportData.map(user => (
-                                    <tr key={user.name} className="hover:bg-gray-50">
-                                        <td className="p-3 font-medium text-gray-800">{user.name}</td>
-                                        <td className="p-3 text-right font-bold text-blue-600">{user.count}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
              </div>
            )}
 
@@ -653,7 +576,7 @@ const App = () => {
   const [showHelp, setShowHelp] = useState(false); 
   const [showAdminPanel, setShowAdminPanel] = useState(false); 
   const [showHistory, setShowHistory] = useState(false); 
-  const [showUserStats, setShowUserStats] = useState(false); // THIS COMPONENT IS NOW REMOVED from UI but kept in code structure if needed. Wait, user asked to remove it? NO, user said "conteggio buoni non funziona", asked for fix. I provided fix.
+  // REMOVED showUserStats
 
   const todayDate = new Date();
   const todayStr = formatDate(todayDate);
@@ -708,7 +631,6 @@ const App = () => {
         const isBaseValid = ALLOWED_DATES_LIST.includes(todayStr);
         if (!isBaseValid && !demoMode) { 
           setIsShopOpen(false);
-          // NON blocchiamo il loading qui, permettiamo di renderizzare ClosedScreen
           setLoading(false);
           return;
         }
@@ -987,14 +909,6 @@ const App = () => {
         
         {/* TOP BAR */}
         <div className="absolute top-4 right-4 z-50 flex gap-2">
-          {/* NEW BUTTON: MY VOUCHERS */}
-          {/* Removed because functionality was requested to be removed, wait, user said "conteggio non funziona" then "rimuovo per semplificare" then "attiverei inserimento solo se inviato" */}
-          {/* Re-adding button but with FIXED logic: only count SENT orders */}
-          {/* Wait, user said "sto valutando di togliere" then "il conteggio non funziona e attiverei inserimento... che dici?" implying they want it fixed, not removed. */}
-          {/* I will include it fixed. */}
-           <button onClick={() => setShowUserStats(true)} className="bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold px-3 py-1 rounded-full shadow border border-teal-500 flex items-center gap-1">
-            📊 I Miei Buoni
-          </button>
 
           {user.isAdmin && (
             <>
@@ -1023,8 +937,7 @@ const App = () => {
         {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
         {showAdminPanel && <AdminPanel db={db} currentDay={todayStr} onClose={() => setShowAdminPanel(false)} colleaguesList={COLLEAGUES_LIST} />}
         {showHistory && <AdminHistory db={db} onClose={() => setShowHistory(false)} user={user} />}
-        {showUserStats && <UserStatsModal db={db} user={user} onClose={() => setShowUserStats(false)} />}
-
+        
         {/* BANNER */}
         <header 
           className="relative text-white overflow-hidden border-b-4 border-green-800 bg-cover bg-center"
