@@ -26,18 +26,19 @@ const SETTINGS_DOC_PATH = `${PUBLIC_DATA_PATH}/settings`;
 
 const BANNER_IMAGE_URL = "https://images.unsplash.com/photo-1559339352-11d035aa65de?q=80&w=2074&auto=format&fit=crop"; 
 
-// --- PASSWORD DI SICUREZZA PER IL TASTO ROSSO ---
+// --- PASSWORD DI SICUREZZA ---
 const DB_RESET_PASSWORD = "admin";
 
-// --- UTENTE INIZIALE (GIOACCHINO) ---
-// Questo utente viene creato SOLO se premi "RIPRISTINA DB".
-const INITIAL_ADMIN = { 
+// --- DATI INIZIALI (SEED) ---
+const INITIAL_COLLEAGUES = [
+  { 
     id: 'u_admin_gioacchino', 
     name: 'Gioacchino Battaglia', 
     email: 'gioacchino.battaglia@comune.formigine.mo.it', 
     pin: '7378', 
     isAdmin: true 
-};
+  }
+];
 
 const INITIAL_SETTINGS = {
   emailBar: "gioacchino.battaglia@comune.formigine.mo.it",
@@ -245,7 +246,7 @@ const LoginScreen = ({ onLogin, demoMode, onToggleDemo, colleagues = [], onReset
   };
   
   const handleResetClick = () => {
-      const pwd = prompt("ATTENZIONE: Stai per cancellare TUTTI gli utenti e ripristinare solo Gioacchino Battaglia. Inserisci password:");
+      const pwd = prompt("ATTENZIONE: Stai per cancellare TUTTI gli utenti e ripristinare solo l'Admin. Inserisci password:");
       if (pwd === DB_RESET_PASSWORD) {
           onResetDB();
       } else {
@@ -643,7 +644,7 @@ const App = () => {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
   const [showHelp, setShowHelp] = useState(false); 
-  const [showAdminPanel, setShowAdminPanel] = useState(false); 
+  const [showAdminPanel, setShowAdminPanel] = useState(false); // Changed from showAdminCal
   const [showHistory, setShowHistory] = useState(false); 
 
   const todayDate = new Date();
@@ -674,30 +675,32 @@ const App = () => {
 
   // HANDLE RESET COMPLETO
   const handleHardReset = async () => {
+      if(!db) return;
       setLoading(true);
       try {
-        // 1. Cancella collezione users (leggi e cancella uno a uno)
         const usersRef = collection(db, USERS_COLLECTION_PATH);
         const snap = await getDocs(usersRef);
         
         const batch = writeBatch(db);
+        // Cancella vecchi
         snap.docs.forEach(doc => {
             batch.delete(doc.ref);
         });
         
-        // 2. Inserisci solo Admin Iniziale
+        // Inserisci solo Admin Iniziale
         INITIAL_COLLEAGUES.forEach(u => {
             const docRef = doc(usersRef, u.id);
             batch.set(docRef, u);
         });
         
-        // 3. Reset settings
+        // Reset settings
         const settingsRef = doc(db, SETTINGS_DOC_PATH, 'main');
         batch.set(settingsRef, INITIAL_SETTINGS);
 
         await batch.commit();
-        alert("Database resettato! Ora c'è solo l'admin iniziale. Ricarica la pagina.");
-        window.location.reload();
+        alert("Database resettato! Ora c'è solo l'admin iniziale.");
+        // Non serve ricaricare la pagina, il listener aggiornerà la lista
+        setLoading(false);
       } catch (e) {
         console.error(e);
         alert(`Errore durante il reset: ${e.message}`);
@@ -720,11 +723,12 @@ const App = () => {
       setDb(dbInstance);
       setAuth(authInstance);
 
-      // Listener in tempo reale per utenti e settings (Sincronizzazione Automatica)
+      // LISTENER CRUCIALE: AGGIORNA LA LISTA IN TEMPO REALE
       const subscribeToData = () => {
          // Users
          const unsubUsers = onSnapshot(collection(dbInstance, USERS_COLLECTION_PATH), (snap) => {
             const loadedUsers = snap.docs.map(d => d.data());
+            loadedUsers.sort((a,b) => a.name.localeCompare(b.name));
             setColleaguesList(loadedUsers);
             setDataLoaded(true);
          });
