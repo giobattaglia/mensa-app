@@ -17,16 +17,33 @@ const firebaseConfig = {
 const appId = 'mensa-app-v1'; 
 const initialAuthToken = null;
 
-// Percorsi Firestore (Solo per ordini e impostazioni)
+// Percorsi Firestore
 const PUBLIC_DATA_PATH = `artifacts/${appId}/public/data`;
 const PUBLIC_ORDERS_COLLECTION = `${PUBLIC_DATA_PATH}/mealOrders`;
 const CONFIG_DOC_PATH = `${PUBLIC_DATA_PATH}/config`; 
+const USERS_COLLECTION_PATH = `${PUBLIC_DATA_PATH}/users`;
 const SETTINGS_DOC_PATH = `${PUBLIC_DATA_PATH}/settings`;
 
 const BANNER_IMAGE_URL = "https://images.unsplash.com/photo-1559339352-11d035aa65de?q=80&w=2074&auto=format&fit=crop"; 
 
-// --- 👥 LISTA COLLEGHI UFFICIALE (GESTITA DA CODICE) ---
-// Modifica qui sotto per aggiungere/rimuovere colleghi o cambiare PIN.
+// --- UTENTE INIZIALE (GIOACCHINO) ---
+const INITIAL_ADMIN = { 
+    id: 'u_admin_gioacchino', 
+    name: 'Gioacchino Battaglia', 
+    email: 'gioacchino.battaglia@comune.formigine.mo.it', 
+    pin: '7378', 
+    isAdmin: true 
+};
+
+const INITIAL_SETTINGS = {
+  emailBar: "gioacchino.battaglia@comune.formigine.mo.it",
+  phoneBar: "0598751381"
+};
+
+// --- DATA SCADENZA DEMO ---
+const DEMO_EXPIRATION_DATE = new Date('2025-12-31');
+
+// --- 👥 LISTA COLLEGHI UFFICIALE ---
 const COLLEAGUES_LIST = [
   { id: 'u1', name: 'Barbara Zucchi', email: 'b.zucchi@comune.formigine.mo.it', pin: '1111', isAdmin: false },
   { id: 'u2', name: 'Chiara Italiani', email: 'c_italiani@comune.formigine.mo.it', pin: '2222', isAdmin: false },
@@ -40,14 +57,6 @@ const COLLEAGUES_LIST = [
   { id: 'u10', name: 'Roberta Palumbo', email: 'r.palumbo@comune.formigine.mo.it', pin: '1234', isAdmin: false },
   { id: 'u11', name: 'Veronica Cantile', email: 'v.cantile@comune.formigine.mo.it', pin: '0000', isAdmin: false },
 ];
-
-const INITIAL_SETTINGS = {
-  emailBar: "gioacchino.battaglia@comune.formigine.mo.it",
-  phoneBar: "0598751381"
-};
-
-// --- DATA SCADENZA DEMO ---
-const DEMO_EXPIRATION_DATE = new Date('2025-12-31');
 
 // --- UTILITÀ CALENDARIO ---
 const formatDate = (date) => date.toISOString().split('T')[0];
@@ -76,7 +85,6 @@ const getNextOpenDay = (fromDateStr) => {
   return ALLOWED_DATES_LIST.find(d => d > todayStr) || 'Data futura non trovata';
 };
 
-// Calcolo giorni rimanenti demo
 const getDaysLeft = () => {
   const now = new Date();
   const diff = DEMO_EXPIRATION_DATE - now;
@@ -91,7 +99,10 @@ const LoadingSpinner = ({ text, onForceStart }) => (
     </svg>
     <span className="text-gray-500 font-medium text-lg mb-4">{text || 'Caricamento sistema...'}</span>
     {onForceStart && (
-      <button onClick={onForceStart} className="text-xs text-blue-500 underline hover:text-blue-700">
+      <button 
+        onClick={onForceStart}
+        className="text-xs text-blue-500 underline hover:text-blue-700 cursor-pointer"
+      >
         Sblocca caricamento
       </button>
     )}
@@ -151,7 +162,7 @@ const HelpModal = ({ onClose }) => (
           <h3 className="font-bold text-gray-800 border-b pb-1 mb-2">1. Come Ordinare</h3>
           <ul className="list-disc pl-5 space-y-2 text-sm text-gray-600">
             <li>Il sistema apre solo il <strong>Lunedì</strong> e <strong>Giovedì</strong>.</li>
-            <li>Negli altri giorni puoi comunque entrare per vedere lo storico o i tuoi buoni.</li>
+            <li>Scrivi il piatto, scegli l'acqua e se mangi al bar o asporto.</li>
           </ul>
         </div>
 
@@ -220,11 +231,13 @@ const WaterIcon = ({ type, selected, hasError }) => {
 };
 
 // --- SCHERMATA LOGIN ---
-const LoginScreen = ({ onLogin, demoMode, onToggleDemo }) => {
+const LoginScreen = ({ onLogin, demoMode, onToggleDemo, colleagues = [] }) => {
   const [selectedColleague, setSelectedColleague] = useState('');
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
 
+  const safeColleagues = Array.isArray(colleagues) ? colleagues : [];
+  
   const isDemoExpired = new Date() > DEMO_EXPIRATION_DATE;
   const daysLeft = getDaysLeft();
 
@@ -233,8 +246,7 @@ const LoginScreen = ({ onLogin, demoMode, onToggleDemo }) => {
       setError('Seleziona il tuo nome dalla lista.');
       return;
     }
-    // USA SEMPRE LA LISTA STATICA
-    const user = COLLEAGUES_LIST.find(c => c.id === selectedColleague);
+    const user = safeColleagues.find(c => c.id === selectedColleague);
     if (user && user.pin === pin) {
       onLogin(user);
     } else {
@@ -273,7 +285,7 @@ const LoginScreen = ({ onLogin, demoMode, onToggleDemo }) => {
               className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none bg-white"
             >
               <option value="">-- Seleziona il tuo nome --</option>
-              {COLLEAGUES_LIST.map(c => (
+              {safeColleagues.map(c => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
@@ -299,13 +311,14 @@ const LoginScreen = ({ onLogin, demoMode, onToggleDemo }) => {
 
           <button 
             onClick={handleLogin}
-            className="w-full bg-green-700 hover:bg-green-800 text-white font-bold py-3 rounded-lg shadow-lg transform transition active:scale-95"
+            className="w-full bg-green-700 hover:bg-green-800 text-white font-bold py-3 rounded-lg shadow-lg transform transition active:scale-95 disabled:opacity-50"
+            disabled={safeColleagues.length === 0}
           >
             ACCEDI
           </button>
         </div>
 
-        {/* PULSANTE DEMO */}
+        {/* PULSANTE DEMO - SPARISCE DOPO SCADENZA */}
         {!isDemoExpired && (
             <div className="mt-8 pt-4 border-t flex justify-center">
             <button 
@@ -354,6 +367,7 @@ const UserStatsModal = ({ db, user, onClose }) => {
         querySnapshot.forEach((doc) => {
             const data = doc.data();
             const myOrder = (data.orders || []).find(o => o.userId === user.id);
+            // Nota: rimuovo il controllo su !isDemo come richiesto
             if (myOrder) {
                 ordersFound.push({
                     date: data.mealDate,
@@ -496,6 +510,8 @@ const AdminHistory = ({ db, onClose, user }) => {
                       <div className="flex gap-2 items-center">
                         <span className="font-bold text-gray-700">{o.userName}</span>
                         <span className="text-gray-600">{o.itemName}</span>
+                         {/* Mostra se è un ordine demo */}
+                         {o.isDemo && <span className="text-[10px] bg-purple-100 text-purple-600 px-1 rounded">TEST</span>}
                       </div>
                       <span className={`text-xs px-2 py-1 rounded font-bold ${o.isTakeout ? "bg-red-100 text-red-600" : "bg-orange-100 text-orange-600"}`}>
                         {o.isTakeout ? "🥡 Asporto" : "☕ Bar"}
@@ -522,12 +538,18 @@ const AdminHistory = ({ db, onClose, user }) => {
   );
 };
 
-// --- COMPONENTE ADMIN: PANNELLO COMPLETO (Calendario, Settings) ---
-const AdminPanel = ({ db, currentDay, onClose }) => {
+// --- COMPONENTE ADMIN: PANNELLO COMPLETO (Calendario, Settings, Report Buoni) ---
+const AdminPanel = ({ db, currentDay, onClose, colleaguesList }) => {
   const [activeTab, setActiveTab] = useState('calendar'); 
   const [blockedDates, setBlockedDates] = useState([]);
   const [settings, setSettings] = useState({ emailBar: '', phoneBar: '' });
   
+  // STATI PER REPORT BUONI
+  const [reportMonth, setReportMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [reportData, setReportData] = useState([]);
+  const [loadingReport, setLoadingReport] = useState(false);
+  const [totalReportMeals, setTotalReportMeals] = useState(0);
+
   useEffect(() => {
     if (!db) return;
     
@@ -539,6 +561,62 @@ const AdminPanel = ({ db, currentDay, onClose }) => {
         if (snap.exists()) setSettings(snap.data());
     });
   }, [db]);
+
+  // Carica Report Buoni quando cambia la tab o il mese
+  useEffect(() => {
+    if (activeTab === 'vouchers') {
+        loadVoucherReport();
+    }
+  }, [activeTab, reportMonth]);
+
+  const loadVoucherReport = async () => {
+    setLoadingReport(true);
+    const [year, month] = reportMonth.split('-');
+    const startDate = `${year}-${month}-01`;
+    const lastDay = new Date(year, month, 0).getDate();
+    const endDate = `${year}-${month}-${lastDay}`;
+
+    try {
+        const q = query(
+            collection(db, PUBLIC_ORDERS_COLLECTION),
+            where('mealDate', '>=', startDate),
+            where('mealDate', '<=', endDate)
+        );
+        const querySnapshot = await getDocs(q);
+        
+        const counts = {};
+        let total = 0;
+
+        // Inizializza tutti i colleghi a 0
+        colleaguesList.forEach(c => {
+            counts[c.id] = { name: c.name, count: 0 };
+        });
+
+        querySnapshot.forEach((doc) => {
+            const data = doc.data();
+            const dayOrders = data.orders || [];
+            dayOrders.forEach(order => {
+                if (counts[order.userId]) {
+                    counts[order.userId].count++;
+                    total++;
+                } else {
+                    // Gestione ex-colleghi o ID non trovati
+                    counts[order.userId] = { name: order.userName || 'Sconosciuto', count: 1 };
+                    total++;
+                }
+            });
+        });
+
+        // Converti in array e ordina per nome
+        const reportArray = Object.values(counts).sort((a, b) => a.name.localeCompare(b.name));
+        setReportData(reportArray);
+        setTotalReportMeals(total);
+
+    } catch (e) {
+        console.error("Errore report:", e);
+    }
+    setLoadingReport(false);
+  };
 
   const toggleDate = async (dateStr) => {
     let newDates = [];
@@ -568,9 +646,10 @@ const AdminPanel = ({ db, currentDay, onClose }) => {
            <button onClick={onClose} className="text-gray-500 hover:text-red-600 font-bold text-xl">&times;</button>
         </div>
         
-        <div className="flex border-b">
-          <button onClick={() => setActiveTab('calendar')} className={`flex-1 py-3 font-bold text-sm ${activeTab === 'calendar' ? 'border-b-2 border-orange-500 text-orange-600 bg-orange-50' : 'text-gray-500 hover:bg-gray-50'}`}>📅 CALENDARIO</button>
-          <button onClick={() => setActiveTab('settings')} className={`flex-1 py-3 font-bold text-sm ${activeTab === 'settings' ? 'border-b-2 border-gray-500 text-gray-800 bg-gray-100' : 'text-gray-500 hover:bg-gray-50'}`}>⚙️ IMPOSTAZIONI</button>
+        <div className="flex border-b overflow-x-auto">
+          <button onClick={() => setActiveTab('calendar')} className={`flex-1 py-3 font-bold text-sm px-4 whitespace-nowrap ${activeTab === 'calendar' ? 'border-b-2 border-orange-500 text-orange-600 bg-orange-50' : 'text-gray-500 hover:bg-gray-50'}`}>📅 CALENDARIO</button>
+          <button onClick={() => setActiveTab('vouchers')} className={`flex-1 py-3 font-bold text-sm px-4 whitespace-nowrap ${activeTab === 'vouchers' ? 'border-b-2 border-green-500 text-green-600 bg-green-50' : 'text-gray-500 hover:bg-gray-50'}`}>📊 REPORT BUONI</button>
+          <button onClick={() => setActiveTab('settings')} className={`flex-1 py-3 font-bold text-sm px-4 whitespace-nowrap ${activeTab === 'settings' ? 'border-b-2 border-gray-500 text-gray-800 bg-gray-100' : 'text-gray-500 hover:bg-gray-50'}`}>⚙️ IMPOSTAZIONI</button>
         </div>
 
         <div className="p-6 overflow-y-auto flex-1">
@@ -592,6 +671,49 @@ const AdminPanel = ({ db, currentDay, onClose }) => {
                   )
                 })}
               </div>
+             </div>
+           )}
+
+           {activeTab === 'vouchers' && (
+             <div className="space-y-4">
+                <div className="bg-green-50 p-4 rounded-lg border border-green-100 flex justify-between items-center">
+                   <div>
+                     <label className="block text-xs font-bold text-green-800 uppercase mb-1">Periodo Report</label>
+                     <input 
+                        type="month" 
+                        value={reportMonth} 
+                        onChange={(e) => setReportMonth(e.target.value)} 
+                        className="border p-2 rounded font-bold text-gray-700"
+                     />
+                   </div>
+                   <div className="text-right">
+                      <span className="block text-3xl font-bold text-green-700">{totalReportMeals}</span>
+                      <span className="text-xs text-green-600 uppercase font-bold">Totale Pasti</span>
+                   </div>
+                </div>
+
+                {loadingReport ? (
+                    <p className="text-center text-gray-400 py-8">Calcolo report in corso...</p>
+                ) : (
+                    <div className="border rounded overflow-hidden">
+                        <table className="w-full text-sm text-left">
+                            <thead className="bg-gray-100 text-gray-600 uppercase text-xs">
+                                <tr>
+                                    <th className="p-3">Collega</th>
+                                    <th className="p-3 text-right">Buoni Usati</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y">
+                                {reportData.map(user => (
+                                    <tr key={user.name} className="hover:bg-gray-50">
+                                        <td className="p-3 font-medium text-gray-800">{user.name}</td>
+                                        <td className="p-3 text-right font-bold text-blue-600">{user.count}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
              </div>
            )}
 
@@ -880,7 +1002,8 @@ const App = () => {
       itemName: cleanDishName,
       waterChoice: selectedWater,
       isTakeout: diningChoice === 'asporto',
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      isDemo: demoMode // Flag per ordini demo
     };
 
     try {
@@ -1083,7 +1206,7 @@ const App = () => {
 
         {/* MODALI */}
         {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
-        {showAdminPanel && <AdminPanel db={db} currentDay={todayStr} onClose={() => setShowAdminPanel(false)} />}
+        {showAdminPanel && <AdminPanel db={db} currentDay={todayStr} onClose={() => setShowAdminPanel(false)} colleaguesList={colleaguesList} />}
         {showHistory && <AdminHistory db={db} onClose={() => setShowHistory(false)} user={user} />}
         {showUserStats && <UserStatsModal db={db} user={user} onClose={() => setShowUserStats(false)} />}
 
