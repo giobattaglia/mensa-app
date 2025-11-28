@@ -25,7 +25,7 @@ const SETTINGS_DOC_PATH = `${PUBLIC_DATA_PATH}/settings`;
 
 const BANNER_IMAGE_URL = "https://images.unsplash.com/photo-1559339352-11d035aa65de?q=80&w=2074&auto=format&fit=crop"; 
 
-// --- 👥 LISTA COLLEGHI UFFICIALE (GESTITA DA CODICE) ---
+// --- 👥 LISTA COLLEGHI UFFICIALE ---
 const COLLEAGUES_LIST = [
   { id: 'u1', name: 'Barbara Zucchi', email: 'b.zucchi@comune.formigine.mo.it', pin: '1111', isAdmin: false },
   { id: 'u2', name: 'Chiara Italiani', email: 'c_italiani@comune.formigine.mo.it', pin: '2222', isAdmin: false },
@@ -44,9 +44,6 @@ const INITIAL_SETTINGS = {
   emailBar: "gioacchino.battaglia@comune.formigine.mo.it",
   phoneBar: "0598751381"
 };
-
-// --- DATA SCADENZA DEMO ---
-const DEMO_EXPIRATION_DATE = new Date('2025-12-31');
 
 // --- UTILITÀ CALENDARIO ---
 const formatDate = (date) => date.toISOString().split('T')[0];
@@ -73,12 +70,6 @@ const ALLOWED_DATES_LIST = generateAllowedDates();
 const getNextOpenDay = (fromDateStr) => {
   const todayStr = fromDateStr || formatDate(new Date());
   return ALLOWED_DATES_LIST.find(d => d > todayStr) || 'Data futura non trovata';
-};
-
-const getDaysLeft = () => {
-  const now = new Date();
-  const diff = DEMO_EXPIRATION_DATE - now;
-  return Math.ceil(diff / (1000 * 60 * 60 * 24)); 
 };
 
 // Helper CSV
@@ -231,15 +222,12 @@ const WaterIcon = ({ type, selected, hasError }) => {
 };
 
 // --- SCHERMATA LOGIN ---
-const LoginScreen = ({ onLogin, demoMode, onToggleDemo, colleagues = [] }) => {
+const LoginScreen = ({ onLogin, colleagues = [] }) => {
   const [selectedColleague, setSelectedColleague] = useState('');
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
 
   const safeColleagues = Array.isArray(colleagues) ? colleagues : [];
-  
-  const isDemoExpired = new Date() > DEMO_EXPIRATION_DATE;
-  const daysLeft = getDaysLeft();
 
   const handleLogin = () => {
     if (!selectedColleague) {
@@ -259,7 +247,6 @@ const LoginScreen = ({ onLogin, demoMode, onToggleDemo, colleagues = [] }) => {
     <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
       <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border-t-8 border-green-700 relative">
         <div className="text-center mb-8">
-          {/* ICONA BAR VERDE */}
           <div className="flex justify-center mb-2">
             <div className="p-3 bg-green-50 rounded-full shadow-sm">
              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-12 h-12 text-green-700">
@@ -318,26 +305,88 @@ const LoginScreen = ({ onLogin, demoMode, onToggleDemo, colleagues = [] }) => {
             ACCEDI
           </button>
         </div>
-
-        {/* PULSANTE DEMO - SPARISCE DOPO SCADENZA */}
-        {!isDemoExpired && (
-            <div className="mt-8 pt-4 border-t flex justify-center">
-            <button 
-                onClick={onToggleDemo}
-                className={`text-xs font-semibold flex items-center gap-2 px-4 py-2 rounded-full transition-all shadow-sm ${
-                demoMode 
-                    ? 'bg-purple-600 text-white hover:bg-purple-700 border border-purple-700' 
-                    : 'bg-purple-50 text-purple-600 hover:bg-purple-100 border border-purple-200'
-                }`}
-            >
-                <span>{demoMode ? '✅' : '🧪'}</span> 
-                {demoMode ? `Demo Attiva (Disattiva)` : `Attiva Demo (Test) - Restano ${daysLeft} gg`}
-            </button>
-            </div>
-        )}
       </div>
     </div>
   );
+};
+
+// --- COMPONENTE GESTIONE MENU (PER TUTTI) ---
+const PublicMenuManager = ({ db, onClose, currentMenu }) => {
+    const [bulkText, setBulkText] = useState("");
+    const [loading, setLoading] = useState(false);
+
+    const handleImport = async () => {
+        if (!bulkText.trim()) return;
+        setLoading(true);
+
+        const lines = bulkText.split('\n')
+          .map(line => line.trim())
+          // Rimuovi caratteri elenco puntato all'inizio (es: "- ", "* ", "1. ")
+          .map(line => line.replace(/^[-*•\d\.]+\s*/, ''))
+          .filter(line => line.length > 0);
+        
+        if (lines.length === 0) {
+            setLoading(false);
+            return;
+        }
+        
+        // Appendiamo ai piatti esistenti per non cancellare roba se uno aggiunge
+        const newMenu = [...(currentMenu || []), ...lines];
+        // Rimuovi duplicati
+        const uniqueMenu = [...new Set(newMenu)];
+
+        try {
+            await setDoc(doc(db, CONFIG_DOC_PATH, 'dailyMenu'), { items: uniqueMenu }, { merge: true });
+            alert("Menu aggiornato con successo! 🍝");
+            onClose();
+        } catch(e) {
+            console.error(e);
+            alert("Errore aggiornamento menu");
+        }
+        setLoading(false);
+    };
+    
+    const handleClear = async () => {
+        if (!confirm("Vuoi cancellare tutto il menu del giorno per tutti?")) return;
+        setLoading(true);
+        await setDoc(doc(db, CONFIG_DOC_PATH, 'dailyMenu'), { items: [] }, { merge: true });
+        setLoading(false);
+        onClose();
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
+            <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 relative">
+                <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-2xl font-bold">&times;</button>
+                <h2 className="text-xl font-bold text-purple-800 mb-2 flex items-center gap-2">📝 Inserisci Menu</h2>
+                <p className="text-sm text-gray-500 mb-4">Hai ricevuto il menu su WhatsApp o Email? Copia il testo e incollalo qui sotto. Il sistema creerà i pulsanti per tutti.</p>
+                
+                <textarea 
+                    className="w-full border-2 border-purple-100 rounded-lg p-3 text-sm h-40 focus:border-purple-500 focus:ring-2 focus:ring-purple-200 outline-none transition-all"
+                    placeholder="Incolla qui la lista dei piatti...&#10;Lasagne&#10;Arrosto con patate&#10;Insalatona"
+                    value={bulkText}
+                    onChange={(e) => setBulkText(e.target.value)}
+                />
+
+                <div className="flex gap-3 mt-4">
+                    <button 
+                        onClick={handleClear}
+                        className="flex-1 bg-white border border-red-200 text-red-600 py-2 rounded-lg font-bold text-sm hover:bg-red-50"
+                        disabled={loading}
+                    >
+                        🗑️ Svuota Tutto
+                    </button>
+                    <button 
+                        onClick={handleImport}
+                        className="flex-1 bg-purple-600 text-white py-2 rounded-lg font-bold text-sm hover:bg-purple-700 shadow-md disabled:opacity-50"
+                        disabled={loading}
+                    >
+                        {loading ? "Salvataggio..." : "✅ Pubblica Menu"}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
 };
 
 // --- COMPONENTE ADMIN: STORICO ORDINI ---
@@ -372,7 +421,7 @@ const AdminHistory = ({ db, onClose, user }) => {
 
   const deleteDay = async () => {
       if (!user.isAdmin) return;
-      if (!confirm(`Sei SICURO di voler cancellare TUTTI gli ordini del ${selectedDate}? Questa azione è irreversibile e rimuoverà i buoni dal conteggio.`)) return;
+      if (!confirm(`Sei SICURO di voler cancellare TUTTI gli ordini del ${selectedDate}? Questa azione è irreversibile.`)) return;
       
       try {
           await deleteDoc(doc(db, PUBLIC_ORDERS_COLLECTION, selectedDate));
@@ -414,7 +463,6 @@ const AdminHistory = ({ db, onClose, user }) => {
                       <div className="flex gap-2 items-center">
                         <span className="font-bold text-gray-700">{o.userName}</span>
                         <span className="text-gray-600">{o.itemName}</span>
-                         {o.isDemo && <span className="text-[10px] bg-purple-100 text-purple-600 px-1 rounded">TEST</span>}
                       </div>
                       <span className={`text-xs px-2 py-1 rounded font-bold ${o.isTakeout ? "bg-red-100 text-red-600" : "bg-orange-100 text-orange-600"}`}>
                         {o.isTakeout ? "🥡 Asporto" : "☕ Bar"}
@@ -446,12 +494,6 @@ const AdminPanel = ({ db, currentDay, onClose, colleaguesList }) => {
   const [activeTab, setActiveTab] = useState('calendar'); 
   const [blockedDates, setBlockedDates] = useState([]);
   const [settings, setSettings] = useState({ emailBar: '', phoneBar: '' });
-  
-  // Menu
-  const [menu, setMenu] = useState([]);
-  const [newDish, setNewDish] = useState("");
-  // Bulk Import State
-  const [bulkText, setBulkText] = useState("");
 
   useEffect(() => {
     if (!db) return;
@@ -459,59 +501,11 @@ const AdminPanel = ({ db, currentDay, onClose, colleaguesList }) => {
     getDoc(doc(db, CONFIG_DOC_PATH, 'holidays')).then(snap => {
         if (snap.exists()) setBlockedDates(snap.data().dates || []);
     });
-    
-    // Load Daily Menu
-     getDoc(doc(db, CONFIG_DOC_PATH, 'dailyMenu')).then(snap => {
-        if (snap.exists()) setMenu(snap.data().items || []);
-    });
 
     getDoc(doc(db, SETTINGS_DOC_PATH, 'main')).then(snap => {
         if (snap.exists()) setSettings(snap.data());
     });
   }, [db]);
-
-  // BULK IMPORT FUNCTION (PULIZIA E MIGLIORAMENTO)
-  const handleBulkImport = async () => {
-      if (!bulkText.trim()) return;
-      
-      const lines = bulkText.split('\n')
-          .map(line => line.trim())
-          // Rimuovi caratteri elenco puntato all'inizio (es: "- ", "* ", "1. ")
-          .map(line => line.replace(/^[-*•\d\.]+\s*/, ''))
-          .filter(line => line.length > 0);
-          
-      if (lines.length === 0) return;
-
-      // Uniamo i nuovi piatti a quelli esistenti evitando duplicati
-      const newItems = lines.filter(item => !menu.includes(item));
-      const updatedMenu = [...menu, ...newItems];
-      
-      setMenu(updatedMenu);
-      setBulkText(""); 
-      
-      await setDoc(doc(db, CONFIG_DOC_PATH, 'dailyMenu'), { items: updatedMenu }, { merge: true });
-      alert(`Importati ${newItems.length} nuovi piatti!`);
-  };
-
-  const clearMenu = async () => {
-      if(!confirm("Vuoi davvero cancellare tutto il menu del giorno?")) return;
-      setMenu([]);
-      await setDoc(doc(db, CONFIG_DOC_PATH, 'dailyMenu'), { items: [] }, { merge: true });
-  };
-  
-  const addDish = async () => {
-      if (!newDish.trim()) return;
-      const updatedMenu = [...menu, newDish.trim()];
-      setMenu(updatedMenu);
-      setNewDish("");
-      await setDoc(doc(db, CONFIG_DOC_PATH, 'dailyMenu'), { items: updatedMenu }, { merge: true });
-  };
-
-  const removeDish = async (index) => {
-      const updatedMenu = menu.filter((_, i) => i !== index);
-      setMenu(updatedMenu);
-      await setDoc(doc(db, CONFIG_DOC_PATH, 'dailyMenu'), { items: updatedMenu }, { merge: true });
-  };
 
   const toggleDate = async (dateStr) => {
     let newDates = [];
@@ -543,7 +537,6 @@ const AdminPanel = ({ db, currentDay, onClose, colleaguesList }) => {
         
         <div className="flex border-b overflow-x-auto">
           <button onClick={() => setActiveTab('calendar')} className={`flex-1 py-3 font-bold text-sm px-4 whitespace-nowrap ${activeTab === 'calendar' ? 'border-b-2 border-orange-500 text-orange-600 bg-orange-50' : 'text-gray-500 hover:bg-gray-50'}`}>📅 CALENDARIO</button>
-           <button onClick={() => setActiveTab('menu')} className={`flex-1 py-3 font-bold text-sm px-4 whitespace-nowrap ${activeTab === 'menu' ? 'border-b-2 border-purple-500 text-purple-600 bg-purple-50' : 'text-gray-500 hover:bg-gray-50'}`}>🍽️ MENU</button>
           <button onClick={() => setActiveTab('users')} className={`flex-1 py-3 font-bold text-sm px-4 whitespace-nowrap ${activeTab === 'users' ? 'border-b-2 border-blue-500 text-blue-600 bg-blue-50' : 'text-gray-500 hover:bg-gray-50'}`}>👥 UTENTI</button>
           <button onClick={() => setActiveTab('settings')} className={`flex-1 py-3 font-bold text-sm px-4 whitespace-nowrap ${activeTab === 'settings' ? 'border-b-2 border-gray-500 text-gray-800 bg-gray-100' : 'text-gray-500 hover:bg-gray-50'}`}>⚙️ IMPOSTAZIONI</button>
         </div>
@@ -567,61 +560,6 @@ const AdminPanel = ({ db, currentDay, onClose, colleaguesList }) => {
                   )
                 })}
               </div>
-             </div>
-           )}
-           
-           {activeTab === 'menu' && (
-             <div className="space-y-4">
-                <p className="text-sm text-gray-500">Gestisci i piatti del giorno. Puoi usare l'importazione massiva per incollare una lista da WhatsApp o Excel.</p>
-                
-                {/* INSERIMENTO SINGOLO */}
-                <div className="flex gap-2">
-                    <input 
-                        className="border p-2 rounded flex-1" 
-                        placeholder="Es: Pasta al Pomodoro" 
-                        value={newDish}
-                        onChange={(e) => setNewDish(e.target.value)}
-                        onKeyPress={(e) => e.key === 'Enter' && addDish()}
-                    />
-                    <button onClick={addDish} className="bg-purple-600 text-white px-4 py-2 rounded font-bold">Aggiungi</button>
-                </div>
-                
-                {/* IMPORT MASSIVO */}
-                <div className="mt-6 border-t pt-4 bg-purple-50 p-4 rounded-lg">
-                    <p className="text-xs font-bold text-purple-800 mb-2">📋 IMPORTA LISTA (Copia-Incolla)</p>
-                    <textarea 
-                        className="w-full border p-2 rounded text-sm h-24" 
-                        placeholder="Incolla qui la lista dei piatti (uno per riga)...&#10;- Pasta al Sugo&#10;* Cotoletta&#10;1. Insalata Mista"
-                        value={bulkText}
-                        onChange={(e) => setBulkText(e.target.value)}
-                    />
-                    <div className="flex gap-2 mt-2">
-                        <button 
-                            onClick={handleBulkImport} 
-                            className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-1 rounded text-sm font-bold flex-1"
-                        >
-                            📥 Importa Lista Pulita
-                        </button>
-                         <button 
-                            onClick={clearMenu} 
-                            className="bg-white border border-red-300 text-red-600 hover:bg-red-50 px-4 py-1 rounded text-sm font-bold"
-                        >
-                            🗑️ Svuota Menu
-                        </button>
-                    </div>
-                    <p className="text-[10px] text-gray-500 mt-1">Il sistema rimuoverà automaticamente elenchi puntati, numeri e trattini iniziali.</p>
-                </div>
-
-                <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t">
-                    <p className="w-full text-xs font-bold text-gray-400 uppercase mb-2">Menu Attuale ({menu.length} piatti)</p>
-                    {menu.length === 0 && <p className="text-gray-400 italic text-sm w-full text-center">Nessun piatto inserito.</p>}
-                    {menu.map((dish, i) => (
-                        <div key={i} className="bg-white border border-gray-200 rounded-full px-3 py-1 flex items-center gap-2 shadow-sm">
-                            <span className="text-gray-700 font-medium text-sm">{dish}</span>
-                            <button onClick={() => removeDish(i)} className="text-gray-400 hover:text-red-600 font-bold ml-1">&times;</button>
-                        </div>
-                    ))}
-                </div>
              </div>
            )}
 
@@ -668,8 +606,6 @@ const App = () => {
   
   const [dailyMenu, setDailyMenu] = useState([]); 
 
-  const [demoMode, setDemoMode] = useState(false);
-
   const [orders, setOrders] = useState([]);
   const [orderStatus, setOrderStatus] = useState('open'); 
   const [orderAuthor, setOrderAuthor] = useState('');
@@ -686,6 +622,7 @@ const App = () => {
   const [showHelp, setShowHelp] = useState(false); 
   const [showAdminPanel, setShowAdminPanel] = useState(false); 
   const [showHistory, setShowHistory] = useState(false); 
+  const [showMenuManager, setShowMenuManager] = useState(false); // MENU MANAGER PER TUTTI
 
   const todayDate = new Date();
   const todayStr = formatDate(todayDate);
@@ -699,8 +636,8 @@ const App = () => {
     return () => clearInterval(timer);
   }, []);
   
-  const hour = demoMode ? 10 : time.getHours();
-  const minute = demoMode ? 0 : time.getMinutes();
+  const hour = time.getHours();
+  const minute = time.getMinutes();
 
   const isLateWarning = (hour === 10 && minute >= 30) || (hour === 11);
   const isBookingClosed = hour >= 12;
@@ -725,7 +662,7 @@ const App = () => {
       setDb(dbInstance);
       setAuth(authInstance);
 
-      // Listener settings
+      // Listener settings & Menu
       const subscribeToData = () => {
          const unsubSettings = onSnapshot(doc(dbInstance, SETTINGS_DOC_PATH, 'main'), (snap) => {
             if (snap.exists()) setAppSettings(snap.data());
@@ -739,12 +676,6 @@ const App = () => {
       };
 
       const checkDateAccess = async () => {
-        if (demoMode) {
-            setIsShopOpen(true);
-            setLoading(false);
-            return;
-        }
-
         const isBaseValid = ALLOWED_DATES_LIST.includes(todayStr);
         if (!isBaseValid) { 
           setIsShopOpen(false);
@@ -800,11 +731,10 @@ const App = () => {
     }
     
     return () => clearTimeout(timeoutId);
-  }, [demoMode]);
+  }, []);
 
   useEffect(() => {
     if (initTimeout && loading) {
-      console.warn("Timeout caricamento: forzo avvio con dati locali.");
       setAppSettings(INITIAL_SETTINGS);
       setDataLoaded(true);
       setIsAuthReady(true);
@@ -859,7 +789,7 @@ const App = () => {
     });
 
     return () => unsubscribe();
-  }, [db, isAuthReady, todayStr, user, actingAsUser, isShopOpen, demoMode]);
+  }, [db, isAuthReady, todayStr, user, actingAsUser]);
 
   const handleLogin = (colleague) => {
     setUser(colleague);
@@ -900,7 +830,7 @@ const App = () => {
 
   const placeOrder = async () => {
     if (orderStatus === 'sent' && !user.isAdmin) { alert("Ordine già inviato al bar! Non puoi modificare."); return; }
-    if (isBookingClosed && !user.isAdmin && !demoMode) { alert("Troppo tardi! Sono passate le 12:00. Solo l'admin può modificare."); return; }
+    if (isBookingClosed && !user.isAdmin) { alert("Troppo tardi! Sono passate le 12:00. Solo l'admin può modificare."); return; }
 
     const newErrors = {};
     let hasError = false;
@@ -926,7 +856,6 @@ const App = () => {
       waterChoice: selectedWater,
       isTakeout: diningChoice === 'asporto',
       timestamp: Date.now(),
-      isDemo: demoMode // Flag per ordini demo
     };
 
     try {
@@ -976,6 +905,7 @@ const App = () => {
 
   const openLateEmail = () => {
     const subject = encodeURIComponent(`Ordine Tardivo/Personale - ${todayDate.toLocaleDateString('it-IT')}`);
+    // Messaggio precompilato semplice per ordine singolo
     const body = encodeURIComponent(`Ciao, sono ${user.name}.\nVorrei ordinare per oggi:\n\n- [SCRIVI QUI IL PIATTO]\n\nGrazie!`);
     const gmailLink = `https://mail.google.com/mail/?view=cm&fs=1&to=${appSettings.emailBar}&su=${subject}&body=${body}`;
     window.open(gmailLink, '_blank');
@@ -984,38 +914,25 @@ const App = () => {
   if (loading || !dataLoaded) return <div className="min-h-screen flex items-center justify-center"><LoadingSpinner text="Connessione al database..." onForceStart={forceStart} /></div>;
 
   // --- LOGICA ACCESSO: Login sempre permesso ---
-  if (!user) return <LoginScreen onLogin={handleLogin} demoMode={demoMode} onToggleDemo={() => setDemoMode(prev => !prev)} colleagues={COLLEAGUES_LIST} />;
+  if (!user) return <LoginScreen onLogin={handleLogin} colleagues={COLLEAGUES_LIST} />;
 
   const barOrders = orders.filter(o => !o.isTakeout);
   const takeoutOrders = orders.filter(o => o.isTakeout);
 
-  // SE CHIUSO E NON DEMO: DISABILITA INPUT MA MOSTRA UI
-  const isClosedView = (!isShopOpen && !demoMode);
+  // SE CHIUSO: DISABILITA INPUT MA MOSTRA UI
+  const isClosedView = (!isShopOpen);
 
   return (
-    <div className={`min-h-screen font-sans p-2 sm:p-6 pb-20 transition-colors duration-500 ${demoMode ? 'bg-purple-50' : 'bg-gray-100'}`}>
+    <div className={`min-h-screen font-sans p-2 sm:p-6 pb-20 transition-colors duration-500 ${'bg-gray-100'}`}>
       
-      {/* DEMO BANNER MIGLIORATO */}
-      {demoMode && (
-        <div className="max-w-5xl mx-auto mb-4 bg-purple-600 text-white text-center p-3 rounded-xl shadow-lg border-2 border-purple-400 flex flex-col sm:flex-row items-center justify-center gap-2 animate-pulse">
-          <span className="text-2xl">🧪</span>
-          <div className="leading-tight">
-            <p className="font-bold text-lg">MODALITÀ DEMO ATTIVA</p>
-            <p className="text-xs text-purple-200">I blocchi orari sono disabilitati per testare l'invio.</p>
-          </div>
-          <button 
-             onClick={() => setDemoMode(false)}
-             className="mt-2 sm:mt-0 sm:ml-4 bg-white text-purple-700 px-4 py-1 rounded-full text-sm font-bold hover:bg-gray-100 shadow-sm transition-transform hover:scale-105"
-          >
-            Esci dalla Demo
-          </button>
-        </div>
-      )}
-
-      <div className={`max-w-5xl mx-auto bg-white shadow-xl rounded-2xl overflow-hidden relative transition-all duration-300 ${demoMode ? 'border-4 border-purple-500 ring-4 ring-purple-200 transform scale-[0.99]' : ''}`}>
+      <div className={`max-w-5xl mx-auto bg-white shadow-xl rounded-2xl overflow-hidden relative transition-all duration-300 ${''}`}>
         
         {/* TOP BAR */}
         <div className="absolute top-4 right-4 z-50 flex gap-2">
+          {/* NEW BUTTON: MENU MANAGER FOR ALL */}
+          <button onClick={() => setShowMenuManager(true)} className="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold px-3 py-1 rounded-full shadow border border-purple-500 flex items-center gap-1">
+            📝 Hai il Menu?
+          </button>
 
           {user.isAdmin && (
             <>
@@ -1044,7 +961,8 @@ const App = () => {
         {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
         {showAdminPanel && <AdminPanel db={db} currentDay={todayStr} onClose={() => setShowAdminPanel(false)} colleaguesList={COLLEAGUES_LIST} />}
         {showHistory && <AdminHistory db={db} onClose={() => setShowHistory(false)} user={user} />}
-        
+        {showMenuManager && <PublicMenuManager db={db} onClose={() => setShowMenuManager(false)} currentMenu={dailyMenu} />}
+
         {/* BANNER */}
         <header 
           className="relative text-white overflow-hidden border-b-4 border-green-800 bg-cover bg-center"
@@ -1074,9 +992,9 @@ const App = () => {
                   Data: <span className="text-white font-bold uppercase">{todayDate.toLocaleDateString('it-IT')}</span>
                 </div>
                 <div className="font-mono font-bold text-white flex items-center gap-2">
-                   {isLateWarning && orderStatus !== 'sent' && !isEmailClosed && !demoMode && !isClosedView && <span className="text-yellow-300 font-bold hidden sm:inline">⚠️ IN CHIUSURA </span>}
-                   {isEmailClosed && orderStatus !== 'sent' && !demoMode && !isClosedView && <span className="text-red-400 font-bold hidden sm:inline">🛑 TEMPO SCADUTO </span>}
-                   {demoMode ? "10:00 (Simulato)" : time.toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'})}
+                   {isLateWarning && orderStatus !== 'sent' && !isEmailClosed && !isClosedView && <span className="text-yellow-300 font-bold hidden sm:inline">⚠️ IN CHIUSURA </span>}
+                   {isEmailClosed && orderStatus !== 'sent' && !isClosedView && <span className="text-red-400 font-bold hidden sm:inline">🛑 TEMPO SCADUTO </span>}
+                   {time.toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'})}
                 </div>
             </div>
             <div className="flex items-center justify-center gap-2 text-xs sm:text-sm">
@@ -1093,7 +1011,7 @@ const App = () => {
         </div>
 
         {/* --- ALERT INVIO TARDIVO (10:30 - 12:00) --- */}
-        {isLateWarning && orderStatus !== 'sent' && !isEmailClosed && !demoMode && !isClosedView && (
+        {isLateWarning && orderStatus !== 'sent' && !isEmailClosed && !isClosedView && (
           <div className="bg-red-100 border-b-4 border-red-500 p-4 text-center sticky top-0 z-40 shadow-xl animate-pulse">
              <h2 className="text-red-800 font-bold text-xl uppercase mb-2">⏰ È Tardi! Chiudi l'ordine</h2>
              <p className="text-red-600 mb-4 text-sm font-bold">Sono passate le 10:30. Il primo che vede questo messaggio deve inviare l'email!</p>
@@ -1109,7 +1027,7 @@ const App = () => {
         )}
 
         {/* --- ALERT CRITICO (12:00+) --- */}
-        {isEmailClosed && orderStatus !== 'sent' && !demoMode && !isClosedView && (
+        {isEmailClosed && orderStatus !== 'sent' && !isClosedView && (
           <div className="bg-gray-900 border-b-4 border-red-600 p-6 text-center sticky top-0 z-50 shadow-2xl">
              <h2 className="text-white font-bold text-2xl uppercase mb-2">🛑 ORDINE WEB CHIUSO</h2>
              <p className="text-gray-300 mb-4 text-sm">Sono passate le 12:00. Non inviare più email, il bar non la leggerebbe.</p>
@@ -1172,16 +1090,19 @@ const App = () => {
                   <>
                     <h3 className={`font-bold mb-3 text-sm uppercase tracking-wide border-b pb-1 ${errors.dishName ? 'text-red-600 border-red-200' : 'text-gray-700'}`}>1. Cosa mangi oggi?</h3>
                     
-                    {/* MENU RAPIDO */}
+                    {/* MENU RAPIDO - ORA CON SCROLL ORIZZONTALE */}
                     {dailyMenu.length > 0 && (
                         <div className="mb-3">
-                            <p className="text-xs text-gray-500 mb-1 font-bold">Menu del Giorno ({dailyMenu.length} piatti):</p>
-                            <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto border p-2 rounded bg-gray-50">
+                            <p className="text-xs text-gray-500 mb-1 font-bold flex justify-between">
+                                <span>Menu del Giorno ({dailyMenu.length} piatti):</span>
+                                <span className="text-purple-600">Scorri ➡</span>
+                            </p>
+                            <div className="flex gap-2 overflow-x-auto pb-2 border p-2 rounded bg-gray-50 snap-x">
                                 {dailyMenu.map((dish, i) => (
                                     <button 
                                         key={i}
                                         onClick={() => { setDishName(dish); if(errors.dishName) setErrors({...errors, dishName: false}); }}
-                                        className="bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 text-xs font-bold px-3 py-1.5 rounded-full transition-colors flex-shrink-0"
+                                        className="bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 text-xs font-bold px-3 py-1.5 rounded-full transition-colors whitespace-nowrap snap-start shadow-sm"
                                     >
                                         {dish}
                                     </button>
@@ -1196,9 +1117,9 @@ const App = () => {
                         setDishName(e.target.value);
                         if(errors.dishName) setErrors(prev => ({...prev, dishName: false}));
                         }}
-                        disabled={orderStatus === 'sent' || (isBookingClosed && !user.isAdmin && !demoMode)}
-                        placeholder={(orderStatus === 'sent' || (isBookingClosed && !user.isAdmin && !demoMode)) ? "Ordine chiuso" : "Es: Insalatona pollo e noci..."}
-                        className={`w-full border-2 p-3 rounded-lg text-lg font-bold text-gray-800 outline-none transition-all placeholder:font-normal placeholder:text-gray-300 ${errors.dishName ? 'border-red-400 bg-red-50' : 'border-green-100 focus:border-green-500'} ${(orderStatus === 'sent' || (isBookingClosed && !user.isAdmin && !demoMode)) ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''}`}
+                        disabled={orderStatus === 'sent' || isBookingClosed}
+                        placeholder={(orderStatus === 'sent' || isBookingClosed) ? "Ordine chiuso" : "Es: Insalatona pollo e noci..."}
+                        className={`w-full border-2 p-3 rounded-lg text-lg font-bold text-gray-800 outline-none transition-all placeholder:font-normal placeholder:text-gray-300 ${errors.dishName ? 'border-red-400 bg-red-50' : 'border-green-100 focus:border-green-500'} ${(orderStatus === 'sent' || isBookingClosed) ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''}`}
                     />
                   </>
                 )}
@@ -1206,7 +1127,7 @@ const App = () => {
 
             {/* SEZIONE 2 & 3 - NASCOSTA SE CHIUSO */}
             {!isClosedView && (
-                <div className={`bg-white border-2 border-slate-200 p-5 rounded-xl shadow-lg sticky bottom-4 z-20 ${orderStatus === 'sent' || (isBookingClosed && !user.isAdmin && !demoMode) ? 'opacity-75 grayscale' : ''}`}>
+                <div className={`bg-white border-2 border-slate-200 p-5 rounded-xl shadow-lg sticky bottom-4 z-20 ${orderStatus === 'sent' || isBookingClosed ? 'opacity-75 grayscale' : ''}`}>
                     <h3 className="font-bold text-gray-700 mb-3 text-sm uppercase tracking-wide border-b pb-1">2. Completa il tuo ordine</h3>
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
@@ -1214,8 +1135,8 @@ const App = () => {
                         <label className={`block text-xs font-bold uppercase mb-2 ${errors.water ? 'text-red-600' : 'text-gray-500'}`}>Scelta Acqua *</label>
                         <div className="flex gap-2 h-20">
                             {['Nessuna', 'Naturale', 'Frizzante'].map(opt => (
-                            <div key={opt} className={`flex-1 ${orderStatus === 'sent' || (isBookingClosed && !user.isAdmin && !demoMode) ? 'pointer-events-none' : ''}`} onClick={() => {
-                                if(orderStatus !== 'sent' && (!isBookingClosed || user.isAdmin || demoMode)) {
+                            <div key={opt} className={`flex-1 ${orderStatus === 'sent' || isBookingClosed ? 'pointer-events-none' : ''}`} onClick={() => {
+                                if(orderStatus !== 'sent' && !isBookingClosed) {
                                 setSelectedWater(opt);
                                 if(errors.water) setErrors(prev => ({...prev, water: false}));
                                 }
@@ -1232,7 +1153,7 @@ const App = () => {
                             {['bar', 'asporto'].map(choice => (
                             <button 
                                 key={choice}
-                                disabled={orderStatus === 'sent' || (isBookingClosed && !user.isAdmin && !demoMode)}
+                                disabled={orderStatus === 'sent' || isBookingClosed}
                                 onClick={() => {
                                 setDiningChoice(choice);
                                 if(errors.dining) setErrors(prev => ({...prev, dining: false}));
@@ -1257,7 +1178,7 @@ const App = () => {
                             <span className="text-green-800 font-bold text-lg">🔒 Ordine Inviato</span>
                             <p className="text-green-700 text-xs">Non è più possibile modificare le scelte.</p>
                         </div>
-                    ) : isBookingClosed && !user.isAdmin && !demoMode ? (
+                    ) : isBookingClosed && !user.isAdmin ? (
                         <div className="bg-red-100 p-3 rounded-lg text-center border border-red-300">
                             <span className="text-red-800 font-bold text-lg">🛑 Ordini Chiusi</span>
                             <p className="text-red-700 text-xs">Le prenotazioni chiudono alle 12:00.</p>
@@ -1279,7 +1200,7 @@ const App = () => {
                             <span>{user.isAdmin && actingAsUser.id !== user.id ? `📨 Ordina per ${actingAsUser.name.split(' ')[0]}` : '📨 Salva la tua scelta'}</span>
                         </button>
                         )}
-                        {message && orderStatus !== 'sent' && !(isBookingClosed && !user.isAdmin && !demoMode) && <p className={`text-center font-bold mt-2 text-sm animate-pulse ${message.includes('Errore') || message.includes('evidenziati') ? 'text-red-600' : 'text-green-600'}`}>{message}</p>}
+                        {message && orderStatus !== 'sent' && !isBookingClosed && <p className={`text-center font-bold mt-2 text-sm animate-pulse ${message.includes('Errore') || message.includes('evidenziati') ? 'text-red-600' : 'text-green-600'}`}>{message}</p>}
                     </div>
                 </div>
             )}
