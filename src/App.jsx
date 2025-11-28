@@ -18,27 +18,28 @@ const appId = 'mensa-app-v1';
 const initialAuthToken = null;
 
 // Percorsi Firestore
-// MODIFICA: Aggiunto suffisso _v2 alle collezioni per avere un DB pulito
 const PUBLIC_DATA_PATH = `artifacts/${appId}/public/data`;
-const PUBLIC_ORDERS_COLLECTION = `${PUBLIC_DATA_PATH}/mealOrders_v2`;
-const CONFIG_DOC_PATH = `${PUBLIC_DATA_PATH}/config_v2`; 
-const USERS_COLLECTION_PATH = `${PUBLIC_DATA_PATH}/users_v2`;
-const SETTINGS_DOC_PATH = `${PUBLIC_DATA_PATH}/settings_v2`;
+const PUBLIC_ORDERS_COLLECTION = `${PUBLIC_DATA_PATH}/mealOrders`;
+const CONFIG_DOC_PATH = `${PUBLIC_DATA_PATH}/config`; 
+const USERS_COLLECTION_PATH = `${PUBLIC_DATA_PATH}/users`;
+const SETTINGS_DOC_PATH = `${PUBLIC_DATA_PATH}/settings`;
 
 const BANNER_IMAGE_URL = "https://images.unsplash.com/photo-1559339352-11d035aa65de?q=80&w=2074&auto=format&fit=crop"; 
 
-// --- PASSWORD DI SICUREZZA PER IL TASTO ROSSO ---
+// --- PASSWORD DI SICUREZZA ---
 const DB_RESET_PASSWORD = "admin";
 
-// --- UTENTE INIZIALE (GIOACCHINO) ---
-// Questo utente viene creato automaticamente se il DB è vuoto.
-const INITIAL_ADMIN = { 
+// --- DATI INIZIALI (SEED) ---
+// IMPORTANTE: Questa è la lista di sicurezza. Se il DB è vuoto o resettato, si usa questa.
+const INITIAL_COLLEAGUES = [
+  { 
     id: 'u_admin_gioacchino', 
     name: 'Gioacchino Battaglia', 
     email: 'gioacchino.battaglia@comune.formigine.mo.it', 
     pin: '7378', 
     isAdmin: true 
-};
+  }
+];
 
 const INITIAL_SETTINGS = {
   emailBar: "gioacchino.battaglia@comune.formigine.mo.it",
@@ -81,9 +82,9 @@ const LoadingSpinner = ({ text, onForceStart }) => (
     {onForceStart && (
       <button 
         onClick={onForceStart}
-        className="text-xs text-blue-500 underline hover:text-blue-700"
+        className="text-xs text-blue-500 underline hover:text-blue-700 cursor-pointer"
       >
-        Ci mette troppo? Clicca qui per avviare comunque.
+        Ci mette troppo? Clicca qui per avviare comunque (Modalità Emergenza).
       </button>
     )}
   </div>
@@ -246,11 +247,11 @@ const LoginScreen = ({ onLogin, demoMode, onToggleDemo, colleagues = [], onReset
   };
   
   const handleResetClick = () => {
-      const pwd = prompt("ATTENZIONE: Stai per cancellare TUTTI gli utenti e ripristinare solo l'Admin. Inserisci password:");
+      const pwd = prompt("ATTENZIONE: Stai per cancellare TUTTI gli utenti e ripristinare solo Gioacchino. Inserisci password:");
       if (pwd === DB_RESET_PASSWORD) {
           onResetDB();
-      } else {
-          if(pwd) alert("Password errata!");
+      } else if (pwd !== null) {
+          alert("Password errata!");
       }
   };
 
@@ -420,18 +421,14 @@ const AdminHistory = ({ db, onClose }) => {
 };
 
 // --- COMPONENTE ADMIN: PANNELLO COMPLETO (Calendario, Utenti, Settings) ---
-const AdminPanel = ({ db, currentDay, onClose, initialColleagues }) => {
-  const [activeTab, setActiveTab] = useState('calendar'); // 'calendar', 'users', 'settings'
+const AdminPanel = ({ db, currentDay, onClose }) => {
+  const [activeTab, setActiveTab] = useState('calendar'); 
   const [blockedDates, setBlockedDates] = useState([]);
   const [users, setUsers] = useState([]);
   const [settings, setSettings] = useState({ emailBar: '', phoneBar: '' });
   
-  // Stato per nuovo utente
   const [newUser, setNewUser] = useState({ name: '', email: '', pin: '', isAdmin: false });
-  // Stato per editing utente
   const [editingUser, setEditingUser] = useState(null);
-  
-  // Feedback di salvataggio
   const [saveMsg, setSaveMsg] = useState('');
 
   useEffect(() => {
@@ -444,12 +441,10 @@ const AdminPanel = ({ db, currentDay, onClose, initialColleagues }) => {
         setUsers(loadedUsers);
     });
 
-    // LOAD CALENDAR
     getDoc(doc(db, CONFIG_DOC_PATH, 'holidays')).then(snap => {
         if (snap.exists()) setBlockedDates(snap.data().dates || []);
     });
 
-    // LOAD SETTINGS
     getDoc(doc(db, SETTINGS_DOC_PATH, 'main')).then(snap => {
         if (snap.exists()) setSettings(snap.data());
     });
@@ -457,7 +452,6 @@ const AdminPanel = ({ db, currentDay, onClose, initialColleagues }) => {
     return () => unsubUsers();
   }, [db]);
 
-  // --- LOGICA CALENDARIO ---
   const toggleDate = async (dateStr) => {
     let newDates = [];
     if (blockedDates.includes(dateStr)) {
@@ -469,7 +463,6 @@ const AdminPanel = ({ db, currentDay, onClose, initialColleagues }) => {
     await setDoc(doc(db, CONFIG_DOC_PATH, 'holidays'), { dates: newDates }, { merge: true });
   };
 
-  // --- LOGICA UTENTI ---
   const addUser = async () => {
     if (!newUser.name || !newUser.pin) return alert("Nome e PIN obbligatori");
     setSaveMsg('Salvataggio in corso...');
@@ -502,7 +495,6 @@ const AdminPanel = ({ db, currentDay, onClose, initialColleagues }) => {
      } catch (e) { console.error(e); alert("Errore modifica"); }
   };
 
-  // --- LOGICA SETTINGS ---
   const saveSettings = async () => {
     try {
       await setDoc(doc(db, SETTINGS_DOC_PATH, 'main'), settings, { merge: true });
@@ -550,7 +542,6 @@ const AdminPanel = ({ db, currentDay, onClose, initialColleagues }) => {
 
            {activeTab === 'users' && (
              <div className="space-y-6">
-                {/* ADD USER */}
                 <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
                    <h4 className="font-bold text-blue-800 mb-2 text-sm">➕ Aggiungi Nuovo Collega</h4>
                    <div className="grid grid-cols-1 sm:grid-cols-5 gap-2">
@@ -567,7 +558,6 @@ const AdminPanel = ({ db, currentDay, onClose, initialColleagues }) => {
                    {saveMsg && <p className="text-center text-green-600 text-xs font-bold mt-2">{saveMsg}</p>}
                 </div>
 
-                {/* USER LIST */}
                 <div className="space-y-2">
                   {users.map(u => (
                     <div key={u.id} className="flex justify-between items-center p-2 border rounded hover:bg-gray-50">
@@ -585,7 +575,7 @@ const AdminPanel = ({ db, currentDay, onClose, initialColleagues }) => {
                          <>
                            <div>
                              <span className="font-bold text-gray-700 block">{u.name} {u.isAdmin && "⭐"}</span>
-                             <span className="text-xs text-gray-500">{u.email} | PIN: ****</span>
+                             <span className="text-xs text-gray-500">{u.email} | PIN: {u.pin}</span>
                            </div>
                            <div className="flex gap-2">
                               <button onClick={() => setEditingUser(u)} className="text-blue-600 text-xs hover:underline">Modifica</button>
@@ -665,42 +655,43 @@ const App = () => {
   const hour = demoMode ? 10 : time.getHours();
   const minute = demoMode ? 0 : time.getMinutes();
 
-  // LOGICA ORARIA
   const isLateWarning = (hour === 10 && minute >= 30) || (hour === 11);
   const isBookingClosed = hour >= 12;
   const isEmailClosed = hour >= 13;
 
-  // FORZATURA MANUALE
   const forceStart = () => {
     setInitTimeout(true);
   };
 
-  // HANDLE RESET COMPLETO
   const handleHardReset = async () => {
       if(!db) return;
       setLoading(true);
       try {
         const usersRef = collection(db, USERS_COLLECTION_PATH);
         const snap = await getDocs(usersRef);
-        
         const batch = writeBatch(db);
-        // Cancella vecchi
+
+        // 1. Delete
         snap.docs.forEach(doc => {
             batch.delete(doc.ref);
         });
-        
-        // Inserisci solo Admin Iniziale
-        // FIX: Aggiunto controllo per evitare errori su collezioni vuote
+
+        // 2. Seed Admin
         const adminRef = doc(usersRef, INITIAL_ADMIN.id);
         batch.set(adminRef, INITIAL_ADMIN);
-        
-        // Reset settings
+
+        // 3. Reset settings
         const settingsRef = doc(db, SETTINGS_DOC_PATH, 'main');
         batch.set(settingsRef, INITIAL_SETTINGS);
 
         await batch.commit();
-        alert("Database resettato! Ora c'è solo l'Admin iniziale. Ricarica la pagina.");
-        window.location.reload();
+        
+        // FORCE RELOAD IN LOCAL STATE (così l'UI si aggiorna subito)
+        setColleaguesList([INITIAL_ADMIN]);
+        setAppSettings(INITIAL_SETTINGS);
+        
+        alert("Database resettato! Utenti cancellati. È rimasto solo l'Admin.");
+        setLoading(false);
       } catch (e) {
         console.error(e);
         alert(`Errore durante il reset: ${e.message}`);
@@ -723,16 +714,13 @@ const App = () => {
       setDb(dbInstance);
       setAuth(authInstance);
 
-      // Listener in tempo reale per utenti e settings
       const subscribeToData = () => {
-         // Users
          const unsubUsers = onSnapshot(collection(dbInstance, USERS_COLLECTION_PATH), (snap) => {
             const loadedUsers = snap.docs.map(d => d.data());
             setColleaguesList(loadedUsers);
             setDataLoaded(true);
          });
 
-         // Settings
          const unsubSettings = onSnapshot(doc(dbInstance, SETTINGS_DOC_PATH, 'main'), (snap) => {
             if (snap.exists()) setAppSettings(snap.data());
          });
@@ -773,7 +761,6 @@ const App = () => {
         }
       };
 
-      // Sequenza di avvio
       initAuth().then(() => {
         subscribeToData();
         checkDateAccess();
@@ -787,7 +774,7 @@ const App = () => {
         }
       });
 
-      return () => { /* cleanup listeners */ };
+      return () => { /* cleanup */ };
 
     } catch (e) { 
       console.error("Errore init:", e); 
@@ -798,10 +785,8 @@ const App = () => {
     return () => clearTimeout(timeoutId);
   }, [demoMode]);
 
-  // Forzatura manuale caricamento
   useEffect(() => {
     if (initTimeout && loading) {
-      console.warn("Timeout caricamento: forzo avvio con dati locali.");
       setColleaguesList([INITIAL_ADMIN]);
       setAppSettings(INITIAL_SETTINGS);
       setDataLoaded(true);
@@ -810,7 +795,6 @@ const App = () => {
     }
   }, [initTimeout, loading]);
 
-  // Restore user session
   useEffect(() => {
       if (dataLoaded && isAuthReady && !user) {
           const savedUserId = sessionStorage.getItem('mealAppUser');
@@ -854,8 +838,6 @@ const App = () => {
         setOrderStatus('open');
         setOrderAuthor('');
       }
-    }, (err) => {
-      console.error("Errore listener ordini:", err);
     });
 
     return () => unsubscribe();
