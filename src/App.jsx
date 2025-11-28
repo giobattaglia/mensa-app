@@ -21,6 +21,7 @@ const initialAuthToken = null;
 const PUBLIC_DATA_PATH = `artifacts/${appId}/public/data`;
 const PUBLIC_ORDERS_COLLECTION = `${PUBLIC_DATA_PATH}/mealOrders`;
 const CONFIG_DOC_PATH = `${PUBLIC_DATA_PATH}/config`; 
+const USERS_COLLECTION_PATH = `${PUBLIC_DATA_PATH}/users`;
 const SETTINGS_DOC_PATH = `${PUBLIC_DATA_PATH}/settings`;
 
 const BANNER_IMAGE_URL = "https://images.unsplash.com/photo-1559339352-11d035aa65de?q=80&w=2074&auto=format&fit=crop"; 
@@ -94,13 +95,21 @@ const downloadCSV = (content, filename) => {
     document.body.removeChild(link);
 };
 
-const LoadingSpinner = ({ text }) => (
+const LoadingSpinner = ({ text, onForceStart }) => (
   <div className="flex flex-col items-center justify-center p-4 min-h-[300px]">
     <svg className="animate-spin -ml-1 mr-3 h-10 w-10 text-green-600 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
     </svg>
     <span className="text-gray-500 font-medium text-lg mb-4">{text || 'Caricamento sistema...'}</span>
+    {onForceStart && (
+      <button 
+        onClick={onForceStart}
+        className="text-xs text-blue-500 underline hover:text-blue-700 cursor-pointer"
+      >
+        Ci mette troppo? Clicca qui per avviare comunque.
+      </button>
+    )}
   </div>
 );
 
@@ -217,6 +226,7 @@ const LoginScreen = ({ onLogin, demoMode, onToggleDemo, colleagues = [] }) => {
     <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
       <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border-t-8 border-green-700 relative">
         <div className="text-center mb-8">
+          {/* ICONA BAR VERDE */}
           <div className="flex justify-center mb-2">
             <div className="p-3 bg-green-50 rounded-full shadow-sm">
              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-12 h-12 text-green-700">
@@ -324,15 +334,17 @@ const UserStatsModal = ({ db, user, onClose }) => {
 
         querySnapshot.forEach((doc) => {
             const data = doc.data();
-            const myOrder = (data.orders || []).find(o => o.userId === user.id);
-            // NOTA: Contiamo anche gli ordini DEMO come richiesto
-            if (myOrder) {
-                ordersFound.push({
-                    date: data.mealDate,
-                    item: myOrder.itemName,
-                    type: myOrder.isTakeout ? 'Asporto' : 'Bar'
-                });
-                count++;
+            // MODIFICA FONDAMENTALE: Contiamo SOLO se lo stato è "sent"
+            if (data.status === 'sent') {
+                const myOrder = (data.orders || []).find(o => o.userId === user.id);
+                if (myOrder) {
+                    ordersFound.push({
+                        date: data.mealDate,
+                        item: myOrder.itemName,
+                        type: myOrder.isTakeout ? 'Asporto' : 'Bar'
+                    });
+                    count++;
+                }
             }
         });
 
@@ -387,7 +399,7 @@ const UserStatsModal = ({ db, user, onClose }) => {
 
         <div className="flex-1 overflow-y-auto border-t border-gray-100 pt-2">
            {loadingStats ? <p className="text-center text-gray-400 p-4">Calcolo in corso...</p> : (
-             userStats.length === 0 ? <p className="text-gray-400 italic text-center p-4 text-sm">Nessun ordine trovato in questo mese.</p> : (
+             userStats.length === 0 ? <p className="text-gray-400 italic text-center p-4 text-sm">Nessun ordine confermato in questo mese.</p> : (
                <div className="space-y-2">
                  {userStats.map((stat, i) => (
                    <div key={i} className="flex justify-between items-center p-3 hover:bg-gray-50 rounded border-b border-gray-100 last:border-0">
@@ -441,7 +453,7 @@ const AdminHistory = ({ db, onClose, user }) => {
 
   const deleteDay = async () => {
       if (!user.isAdmin) return;
-      if (!confirm(`Sei SICURO di voler cancellare TUTTI gli ordini del ${selectedDate}? Questa azione è irreversibile.`)) return;
+      if (!confirm(`Sei SICURO di voler cancellare TUTTI gli ordini del ${selectedDate}? Questa azione è irreversibile e rimuoverà i buoni dal conteggio.`)) return;
       
       try {
           await deleteDoc(doc(db, PUBLIC_ORDERS_COLLECTION, selectedDate));
@@ -564,17 +576,20 @@ const AdminPanel = ({ db, currentDay, onClose, colleaguesList }) => {
 
         querySnapshot.forEach((doc) => {
             const data = doc.data();
-            const dayOrders = data.orders || [];
-            dayOrders.forEach(order => {
-                if (counts[order.userId]) {
-                    counts[order.userId].count++;
-                    total++;
-                } else {
-                    // Fallback se utente rimosso dalla lista statica
-                    counts[order.userId] = { name: order.userName || 'Sconosciuto', count: 1 };
-                    total++;
-                }
-            });
+            // MODIFICA FONDAMENTALE: Conta SOLO se status === 'sent'
+            if (data.status === 'sent') {
+                const dayOrders = data.orders || [];
+                dayOrders.forEach(order => {
+                    if (counts[order.userId]) {
+                        counts[order.userId].count++;
+                        total++;
+                    } else {
+                        // Fallback se utente rimosso dalla lista statica
+                        counts[order.userId] = { name: order.userName || 'Sconosciuto', count: 1 };
+                        total++;
+                    }
+                });
+            }
         });
 
         const reportArray = Object.values(counts).sort((a, b) => a.name.localeCompare(b.name));
@@ -739,7 +754,6 @@ const App = () => {
   const [isAuthReady, setIsAuthReady] = useState(false);
   
   // Dati dinamici
-  const [colleaguesList, setColleaguesList] = useState(COLLEAGUES_LIST); 
   const [appSettings, setAppSettings] = useState(INITIAL_SETTINGS);
   const [dataLoaded, setDataLoaded] = useState(false); 
 
@@ -816,7 +830,7 @@ const App = () => {
         const isBaseValid = ALLOWED_DATES_LIST.includes(todayStr);
         if (!isBaseValid && !demoMode) { 
           setIsShopOpen(false);
-          // NON blocchiamo il loading qui, permettiamo il rendering per fare login
+          // NON blocchiamo il loading qui, permettiamo di renderizzare ClosedScreen
           setLoading(false);
           return;
         }
@@ -875,6 +889,7 @@ const App = () => {
   // Forzatura manuale caricamento
   useEffect(() => {
     if (initTimeout && loading) {
+      console.warn("Timeout caricamento: forzo avvio con dati locali.");
       setAppSettings(INITIAL_SETTINGS);
       setDataLoaded(true);
       setIsAuthReady(true);
@@ -1049,87 +1064,14 @@ const App = () => {
     } catch (e) { console.error("Errore sblocco", e); }
   };
 
-  const getAllEmails = () => {
-    return COLLEAGUES_LIST
-      .map(c => c.email)
-      .filter(email => email && email.includes('@'))
-      .join(',');
-  };
-
-  const generateEmailText = () => {
-    const grouped = orders.reduce((acc, o) => { 
-        const key = o.itemName.trim(); 
-        acc[key] = (acc[key] || 0) + 1; 
-        return acc; 
-    }, {});
-    const water = orders.reduce((acc, o) => { const w = o.waterChoice || 'Nessuna'; acc[w] = (acc[w] || 0) + 1; return acc; }, {});
-
-    let text = `Ciao Laura,\n`;
-    text += `ecco il riepilogo dell'ordine di oggi ${todayDate.toLocaleDateString('it-IT')}.\n`;
-    text += `Ti segnalo gentilmente che gli ordini DA ASPORTO 🥡 e da consumare AL BAR ☕ sono tutti per le ore 13:30.\n`;
-    text += `Grazie come sempre per la disponibilità!\nA dopo\n\n`;
-
-    text += `=========================================\n`;
-    text += `RIEPILOGO ORDINE DEL ${todayDate.toLocaleDateString('it-IT')}\n`;
-    text += `TOTALE ORDINI: ${orders.length}\n`;
-    text += `=========================================\n\n`;
-    
-    text += "--- 🍽️ RIEPILOGO CUCINA (TOTALE) ---\n";
-    Object.entries(grouped).forEach(([name, count]) => {
-      text += `${count}x 🥗 ${name}\n`;
-    });
-
-    if (water['Naturale'] || water['Frizzante']) {
-        text += "\n--- 💧 RIEPILOGO ACQUA ---\n";
-        if (water['Naturale']) text += `💧 Naturale: ${water['Naturale']}\n`;
-        if (water['Frizzante']) text += `🫧 Frizzante: ${water['Frizzante']}\n`;
-    }
-
-    const barOrders = orders.filter(o => !o.isTakeout);
-    const takeoutOrders = orders.filter(o => o.isTakeout);
-
-    if (barOrders.length > 0) {
-        text += `\n=== ☕ CONSUMAZIONE AL BAR (${barOrders.length}) ===\n`;
-        barOrders.forEach((o, i) => {
-            const waterEmoji = o.waterChoice === 'Naturale' ? '💧' : (o.waterChoice === 'Frizzante' ? '🫧' : '');
-            text += `${i + 1}. ${o.userName}: 🥗 ${o.itemName} ${waterEmoji}\n`;
-        });
-    }
-
-    if (takeoutOrders.length > 0) {
-        text += `\n=== 🥡 DA ASPORTO (${takeoutOrders.length}) ===\n`;
-        takeoutOrders.forEach((o, i) => {
-            const waterEmoji = o.waterChoice === 'Naturale' ? '💧' : (o.waterChoice === 'Frizzante' ? '🫧' : '');
-            text += `${i + 1}. ${o.userName}: 🥗 ${o.itemName} ${waterEmoji}\n`;
-        });
-    }
-
-    return text;
-  };
-
-  const openGmail = () => {
-    const subject = encodeURIComponent(`Ordine Pranzo Ufficio - ${todayDate.toLocaleDateString('it-IT')}`);
-    const body = encodeURIComponent(generateEmailText());
-    const ccEmails = getAllEmails();
-    const gmailLink = `https://mail.google.com/mail/?view=cm&fs=1&to=${appSettings.emailBar}&cc=${ccEmails}&su=${subject}&body=${body}`;
-    window.open(gmailLink, '_blank');
-  };
-
-  const openDefaultMail = () => {
-    const subject = encodeURIComponent(`Ordine Pranzo Ufficio - ${todayDate.toLocaleDateString('it-IT')}`);
-    const body = encodeURIComponent(generateEmailText());
-    const ccEmails = getAllEmails();
-    const mailtoLink = `mailto:${appSettings.emailBar}?cc=${ccEmails}&subject=${subject}&body=${body}`;
-    window.location.href = mailtoLink;
-  };
-
   const openLateEmail = () => {
     const subject = encodeURIComponent(`Ordine Tardivo/Personale - ${todayDate.toLocaleDateString('it-IT')}`);
     // Messaggio precompilato semplice per ordine singolo
     const body = encodeURIComponent(`Ciao, sono ${user.name}.\nVorrei ordinare per oggi:\n\n- [SCRIVI QUI IL PIATTO]\n\nGrazie!`);
-    // Solo destinatario Bar, niente CC
-    const mailtoLink = `mailto:${appSettings.emailBar}?subject=${subject}&body=${body}`;
-    window.location.href = mailtoLink;
+    
+    // URL specifico per GMAIL WEB
+    const gmailLink = `https://mail.google.com/mail/?view=cm&fs=1&to=${appSettings.emailBar}&su=${subject}&body=${body}`;
+    window.open(gmailLink, '_blank');
   };
 
   if (loading || !dataLoaded) return <div className="min-h-screen flex items-center justify-center"><LoadingSpinner text="Connessione al database..." onForceStart={forceStart} /></div>;
@@ -1197,7 +1139,7 @@ const App = () => {
 
         {/* MODALI */}
         {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
-        {showAdminPanel && <AdminPanel db={db} currentDay={todayStr} onClose={() => setShowAdminPanel(false)} colleaguesList={colleaguesList} />}
+        {showAdminPanel && <AdminPanel db={db} currentDay={todayStr} onClose={() => setShowAdminPanel(false)} colleaguesList={COLLEAGUES_LIST} />}
         {showHistory && <AdminHistory db={db} onClose={() => setShowHistory(false)} user={user} />}
         {showUserStats && <UserStatsModal db={db} user={user} onClose={() => setShowUserStats(false)} />}
 
