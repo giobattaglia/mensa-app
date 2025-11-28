@@ -490,10 +490,16 @@ const AdminHistory = ({ db, onClose, user }) => {
 };
 
 // --- COMPONENTE ADMIN: PANNELLO COMPLETO ---
-const AdminPanel = ({ db, currentDay, onClose, colleaguesList }) => {
+const AdminPanel = ({ db, currentDay, onClose, colleaguesList, onToggleForceOpen, isForceOpen }) => {
   const [activeTab, setActiveTab] = useState('calendar'); 
   const [blockedDates, setBlockedDates] = useState([]);
   const [settings, setSettings] = useState({ emailBar: '', phoneBar: '' });
+  
+  // Report
+  const [reportMonth, setReportMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [reportData, setReportData] = useState([]);
+  const [loadingReport, setLoadingReport] = useState(false);
+  const [totalReportMeals, setTotalReportMeals] = useState(0);
 
   useEffect(() => {
     if (!db) return;
@@ -506,6 +512,71 @@ const AdminPanel = ({ db, currentDay, onClose, colleaguesList }) => {
         if (snap.exists()) setSettings(snap.data());
     });
   }, [db]);
+
+  // Load report on tab change
+  useEffect(() => {
+      if (activeTab === 'vouchers') loadVoucherReport();
+  }, [activeTab, reportMonth]);
+
+  const loadVoucherReport = async () => {
+    setLoadingReport(true);
+    const [year, month] = reportMonth.split('-');
+    const startDate = `${year}-${month}-01`;
+    const lastDay = new Date(year, month, 0).getDate();
+    const endDate = `${year}-${month}-${lastDay}`;
+
+    try {
+        const q = query(
+            collection(db, PUBLIC_ORDERS_COLLECTION),
+            where('mealDate', '>=', startDate),
+            where('mealDate', '<=', endDate)
+        );
+        const querySnapshot = await getDocs(q);
+        
+        const counts = {};
+        let total = 0;
+
+        // Init counts
+        COLLEAGUES_LIST.forEach(c => {
+            counts[c.id] = { name: c.name, count: 0 };
+        });
+
+        querySnapshot.forEach((doc) => {
+            const data = doc.data();
+            // CONTA SOLO SE INVIATO
+            if (data.status === 'sent') {
+                const dayOrders = data.orders || [];
+                dayOrders.forEach(order => {
+                    if (counts[order.userId]) {
+                        counts[order.userId].count++;
+                        total++;
+                    } else {
+                        // Fallback se utente rimosso dalla lista statica
+                        counts[order.userId] = { name: order.userName || 'Sconosciuto', count: 1 };
+                        total++;
+                    }
+                });
+            }
+        });
+
+        const reportArray = Object.values(counts).sort((a, b) => a.name.localeCompare(b.name));
+        setReportData(reportArray);
+        setTotalReportMeals(total);
+
+    } catch (e) {
+        console.error("Errore report:", e);
+    }
+    setLoadingReport(false);
+  };
+
+  const exportReportCSV = () => {
+      let csv = "Nome Collega,Buoni Consumati\n";
+      reportData.forEach(row => {
+          csv += `"${row.name}",${row.count}\n`;
+      });
+      csv += `TOTALE,${totalReportMeals}\n`;
+      downloadCSV(csv, `Report_Buoni_${reportMonth}.csv`);
+  };
 
   const toggleDate = async (dateStr) => {
     let newDates = [];
@@ -525,6 +596,13 @@ const AdminPanel = ({ db, currentDay, onClose, colleaguesList }) => {
     } catch (e) { console.error(e); alert("Errore impostazioni"); }
   };
 
+  // Funzione per generare mail credenziali
+  const sendCreds = (user) => {
+      const subject = encodeURIComponent("Credenziali App Pranzo");
+      const body = encodeURIComponent(`Ciao ${user.name},\n\necco il tuo PIN per accedere all'app dei pasti: ${user.pin}\n\nSe vuoi cambiarlo, contattami.\n\nSaluti,\nGioacchino`);
+      window.location.href = `mailto:${user.email}?subject=${subject}&body=${body}`;
+  };
+
   const upcoming = ALLOWED_DATES_LIST.filter(d => d >= currentDay).slice(0, 10);
 
   return (
@@ -532,11 +610,24 @@ const AdminPanel = ({ db, currentDay, onClose, colleaguesList }) => {
       <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full h-[85vh] flex flex-col relative overflow-hidden">
         <div className="p-4 border-b flex justify-between items-center bg-gray-50">
            <h2 className="text-xl font-bold text-gray-800">⚙️ Pannello Amministrazione</h2>
+           {/* TOGGLE FORZA APERTURA */}
+           <div className="flex items-center gap-2 mr-4">
+               <label className="text-xs font-bold text-purple-700 cursor-pointer">
+                   <input 
+                    type="checkbox" 
+                    checked={isForceOpen} 
+                    onChange={(e) => onToggleForceOpen(e.target.checked)}
+                    className="mr-1"
+                   />
+                   🔓 Forza Apertura (Test)
+               </label>
+           </div>
            <button onClick={onClose} className="text-gray-500 hover:text-red-600 font-bold text-xl">&times;</button>
         </div>
         
         <div className="flex border-b overflow-x-auto">
           <button onClick={() => setActiveTab('calendar')} className={`flex-1 py-3 font-bold text-sm px-4 whitespace-nowrap ${activeTab === 'calendar' ? 'border-b-2 border-orange-500 text-orange-600 bg-orange-50' : 'text-gray-500 hover:bg-gray-50'}`}>📅 CALENDARIO</button>
+          <button onClick={() => setActiveTab('vouchers')} className={`flex-1 py-3 font-bold text-sm px-4 whitespace-nowrap ${activeTab === 'vouchers' ? 'border-b-2 border-green-500 text-green-600 bg-green-50' : 'text-gray-500 hover:bg-gray-50'}`}>📊 REPORT BUONI</button>
           <button onClick={() => setActiveTab('users')} className={`flex-1 py-3 font-bold text-sm px-4 whitespace-nowrap ${activeTab === 'users' ? 'border-b-2 border-blue-500 text-blue-600 bg-blue-50' : 'text-gray-500 hover:bg-gray-50'}`}>👥 UTENTI</button>
           <button onClick={() => setActiveTab('settings')} className={`flex-1 py-3 font-bold text-sm px-4 whitespace-nowrap ${activeTab === 'settings' ? 'border-b-2 border-gray-500 text-gray-800 bg-gray-100' : 'text-gray-500 hover:bg-gray-50'}`}>⚙️ IMPOSTAZIONI</button>
         </div>
@@ -563,13 +654,84 @@ const AdminPanel = ({ db, currentDay, onClose, colleaguesList }) => {
              </div>
            )}
 
+           {activeTab === 'vouchers' && (
+             <div className="space-y-4">
+                <div className="bg-green-50 p-4 rounded-lg border border-green-100 flex justify-between items-center">
+                   <div>
+                     <label className="block text-xs font-bold text-green-800 uppercase mb-1">Periodo Report</label>
+                     <input 
+                        type="month" 
+                        value={reportMonth} 
+                        onChange={(e) => setReportMonth(e.target.value)} 
+                        className="border p-2 rounded font-bold text-gray-700"
+                     />
+                   </div>
+                   <div className="text-right">
+                      <span className="block text-3xl font-bold text-green-700">{totalReportMeals}</span>
+                      <span className="text-xs text-green-600 uppercase font-bold">Totale Pasti (Confermati)</span>
+                   </div>
+                </div>
+                
+                <div className="flex justify-end">
+                    <button onClick={exportReportCSV} className="text-xs bg-blue-100 text-blue-700 px-3 py-1 rounded font-bold hover:bg-blue-200 flex items-center gap-1">
+                        📥 Scarica Report CSV
+                    </button>
+                </div>
+
+                {loadingReport ? (
+                    <p className="text-center text-gray-400 py-8">Calcolo report in corso...</p>
+                ) : (
+                    <div className="border rounded overflow-hidden">
+                        <table className="w-full text-sm text-left">
+                            <thead className="bg-gray-100 text-gray-600 uppercase text-xs">
+                                <tr>
+                                    <th className="p-3">Collega</th>
+                                    <th className="p-3 text-right">Buoni Usati</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y">
+                                {reportData.map(user => (
+                                    <tr key={user.name} className="hover:bg-gray-50">
+                                        <td className="p-3 font-medium text-gray-800">{user.name}</td>
+                                        <td className="p-3 text-right font-bold text-blue-600">{user.count}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+             </div>
+           )}
+
            {activeTab === 'users' && (
-             <div className="p-8 text-center bg-gray-50 rounded border border-gray-200">
-               <p className="text-gray-600 mb-2 font-bold">🔒 Gestione Utenti da Codice</p>
-               <p className="text-sm text-gray-500">
-                 Per aggiungere, rimuovere o modificare i colleghi, modifica direttamente la lista 
-                 <code>COLLEAGUES_LIST</code> nel file del codice sorgente.
-               </p>
+             <div className="space-y-4">
+               <div className="p-4 bg-blue-50 rounded border border-blue-100 text-center">
+                   <p className="text-blue-800 font-bold text-sm mb-1">Gestione Utenti</p>
+                   <p className="text-xs text-blue-600">
+                       La lista utenti è gestita nel codice per sicurezza. 
+                       Qui puoi inviare rapidamente il PIN via mail.
+                   </p>
+               </div>
+               
+               <div className="border rounded overflow-hidden">
+                   {colleaguesList.map(user => (
+                       <div key={user.id} className="flex justify-between items-center p-3 border-b last:border-0 hover:bg-gray-50">
+                           <div>
+                               <p className="font-bold text-gray-700">{user.name}</p>
+                               <p className="text-xs text-gray-400">{user.email}</p>
+                           </div>
+                           <div className="flex items-center gap-2">
+                               <span className="text-xs bg-gray-100 px-2 py-1 rounded text-gray-500 font-mono">{user.pin}</span>
+                               <button 
+                                onClick={() => sendCreds(user)}
+                                className="text-xs bg-blue-100 text-blue-700 px-3 py-1.5 rounded font-bold hover:bg-blue-200 flex items-center gap-1"
+                               >
+                                   ✉️ Invia PIN
+                               </button>
+                           </div>
+                       </div>
+                   ))}
+               </div>
              </div>
            )}
 
@@ -605,6 +767,7 @@ const App = () => {
   const [dataLoaded, setDataLoaded] = useState(false); 
   
   const [dailyMenu, setDailyMenu] = useState([]); 
+  const [adminOverride, setAdminOverride] = useState(false); // STATO PER FORZARE APERTURA
 
   const [orders, setOrders] = useState([]);
   const [orderStatus, setOrderStatus] = useState('open'); 
@@ -622,7 +785,8 @@ const App = () => {
   const [showHelp, setShowHelp] = useState(false); 
   const [showAdminPanel, setShowAdminPanel] = useState(false); 
   const [showHistory, setShowHistory] = useState(false); 
-  const [showMenuManager, setShowMenuManager] = useState(false); // MENU MANAGER PER TUTTI
+  const [showUserStats, setShowUserStats] = useState(false); 
+  const [showMenuManager, setShowMenuManager] = useState(false); 
 
   const todayDate = new Date();
   const todayStr = formatDate(todayDate);
@@ -639,9 +803,10 @@ const App = () => {
   const hour = time.getHours();
   const minute = time.getMinutes();
 
-  const isLateWarning = (hour === 10 && minute >= 30) || (hour === 11);
-  const isBookingClosed = hour >= 12;
-  const isEmailClosed = hour >= 13;
+  // LOGICA ORARIA - Se Admin Override è attivo, ignora le restrizioni orarie
+  const isLateWarning = !adminOverride && ((hour === 10 && minute >= 30) || (hour === 11));
+  const isBookingClosed = !adminOverride && (hour >= 12);
+  const isEmailClosed = !adminOverride && (hour >= 13);
 
   const forceStart = () => {
     setInitTimeout(true);
@@ -676,6 +841,7 @@ const App = () => {
       };
 
       const checkDateAccess = async () => {
+        // Se non è un giorno consentito, chiudi. (Ma Admin Override bypasserà questo nel render)
         const isBaseValid = ALLOWED_DATES_LIST.includes(todayStr);
         if (!isBaseValid) { 
           setIsShopOpen(false);
@@ -708,6 +874,7 @@ const App = () => {
         }
       };
 
+      // Sequenza di avvio
       initAuth().then(() => {
         subscribeToData();
         checkDateAccess();
@@ -830,7 +997,7 @@ const App = () => {
 
   const placeOrder = async () => {
     if (orderStatus === 'sent' && !user.isAdmin) { alert("Ordine già inviato al bar! Non puoi modificare."); return; }
-    if (isBookingClosed && !user.isAdmin) { alert("Troppo tardi! Sono passate le 12:00. Solo l'admin può modificare."); return; }
+    if (isBookingClosed && !user.isAdmin && !adminOverride) { alert("Troppo tardi! Sono passate le 12:00. Solo l'admin può modificare."); return; }
 
     const newErrors = {};
     let hasError = false;
@@ -919,8 +1086,8 @@ const App = () => {
   const barOrders = orders.filter(o => !o.isTakeout);
   const takeoutOrders = orders.filter(o => o.isTakeout);
 
-  // SE CHIUSO: DISABILITA INPUT MA MOSTRA UI
-  const isClosedView = (!isShopOpen);
+  // SE CHIUSO E NON OVERRIDE: DISABILITA INPUT MA MOSTRA UI
+  const isClosedView = (!isShopOpen && !adminOverride);
 
   return (
     <div className={`min-h-screen font-sans p-2 sm:p-6 pb-20 transition-colors duration-500 ${'bg-gray-100'}`}>
@@ -932,6 +1099,11 @@ const App = () => {
           {/* NEW BUTTON: MENU MANAGER FOR ALL */}
           <button onClick={() => setShowMenuManager(true)} className="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold px-3 py-1 rounded-full shadow border border-purple-500 flex items-center gap-1">
             📝 Hai il Menu?
+          </button>
+
+          {/* NEW BUTTON: MY VOUCHERS */}
+           <button onClick={() => setShowUserStats(true)} className="bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold px-3 py-1 rounded-full shadow border border-teal-500 flex items-center gap-1">
+            📊 I Miei Buoni
           </button>
 
           {user.isAdmin && (
@@ -959,9 +1131,10 @@ const App = () => {
 
         {/* MODALI */}
         {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
-        {showAdminPanel && <AdminPanel db={db} currentDay={todayStr} onClose={() => setShowAdminPanel(false)} colleaguesList={COLLEAGUES_LIST} />}
+        {showAdminPanel && <AdminPanel db={db} currentDay={todayStr} onClose={() => setShowAdminPanel(false)} colleaguesList={COLLEAGUES_LIST} onToggleForceOpen={setAdminOverride} isForceOpen={adminOverride} />}
         {showHistory && <AdminHistory db={db} onClose={() => setShowHistory(false)} user={user} />}
         {showMenuManager && <PublicMenuManager db={db} onClose={() => setShowMenuManager(false)} currentMenu={dailyMenu} />}
+        {showUserStats && <UserStatsModal db={db} user={user} onClose={() => setShowUserStats(false)} />}
 
         {/* BANNER */}
         <header 
@@ -992,13 +1165,15 @@ const App = () => {
                   Data: <span className="text-white font-bold uppercase">{todayDate.toLocaleDateString('it-IT')}</span>
                 </div>
                 <div className="font-mono font-bold text-white flex items-center gap-2">
-                   {isLateWarning && orderStatus !== 'sent' && !isEmailClosed && !isClosedView && <span className="text-yellow-300 font-bold hidden sm:inline">⚠️ IN CHIUSURA </span>}
-                   {isEmailClosed && orderStatus !== 'sent' && !isClosedView && <span className="text-red-400 font-bold hidden sm:inline">🛑 TEMPO SCADUTO </span>}
+                   {/* SE ADMIN OVERRIDE È ATTIVO, MOSTRA UN AVVISO VERDE INVECE CHE ROSSO */}
+                   {adminOverride && <span className="text-green-300 font-bold hidden sm:inline">🔓 OVERRIDE ADMIN ATTIVO </span>}
+                   {isLateWarning && !adminOverride && <span className="text-yellow-300 font-bold hidden sm:inline">⚠️ IN CHIUSURA </span>}
+                   {isEmailClosed && !adminOverride && <span className="text-red-400 font-bold hidden sm:inline">🛑 TEMPO SCADUTO </span>}
                    {time.toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'})}
                 </div>
             </div>
             <div className="flex items-center justify-center gap-2 text-xs sm:text-sm">
-                <div className={`flex items-center gap-1 px-3 py-1 rounded-full ${orderStatus !== 'sent' && !isEmailClosed && !isClosedView ? 'bg-green-600 font-bold' : 'bg-gray-700 text-gray-400'}`}>
+                <div className={`flex items-center gap-1 px-3 py-1 rounded-full ${orderStatus !== 'sent' && !isClosedView ? 'bg-green-600 font-bold' : 'bg-gray-700 text-gray-400'}`}>
                     <span className="bg-white text-gray-900 rounded-full w-4 h-4 flex items-center justify-center text-[10px]">1</span>
                     Raccolta
                 </div>
@@ -1011,7 +1186,7 @@ const App = () => {
         </div>
 
         {/* --- ALERT INVIO TARDIVO (10:30 - 12:00) --- */}
-        {isLateWarning && orderStatus !== 'sent' && !isEmailClosed && !isClosedView && (
+        {isLateWarning && !isClosedView && (
           <div className="bg-red-100 border-b-4 border-red-500 p-4 text-center sticky top-0 z-40 shadow-xl animate-pulse">
              <h2 className="text-red-800 font-bold text-xl uppercase mb-2">⏰ È Tardi! Chiudi l'ordine</h2>
              <p className="text-red-600 mb-4 text-sm font-bold">Sono passate le 10:30. Il primo che vede questo messaggio deve inviare l'email!</p>
@@ -1027,7 +1202,7 @@ const App = () => {
         )}
 
         {/* --- ALERT CRITICO (12:00+) --- */}
-        {isEmailClosed && orderStatus !== 'sent' && !isClosedView && (
+        {isEmailClosed && !isClosedView && (
           <div className="bg-gray-900 border-b-4 border-red-600 p-6 text-center sticky top-0 z-50 shadow-2xl">
              <h2 className="text-white font-bold text-2xl uppercase mb-2">🛑 ORDINE WEB CHIUSO</h2>
              <p className="text-gray-300 mb-4 text-sm">Sono passate le 12:00. Non inviare più email, il bar non la leggerebbe.</p>
