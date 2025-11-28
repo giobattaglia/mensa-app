@@ -18,27 +18,27 @@ const appId = 'mensa-app-v1';
 const initialAuthToken = null;
 
 // Percorsi Firestore
+// MODIFICA: Aggiunto suffisso _v2 alle collezioni per avere un DB pulito
 const PUBLIC_DATA_PATH = `artifacts/${appId}/public/data`;
-const PUBLIC_ORDERS_COLLECTION = `${PUBLIC_DATA_PATH}/mealOrders`;
-const CONFIG_DOC_PATH = `${PUBLIC_DATA_PATH}/config`; 
-const USERS_COLLECTION_PATH = `${PUBLIC_DATA_PATH}/users`;
-const SETTINGS_DOC_PATH = `${PUBLIC_DATA_PATH}/settings`;
+const PUBLIC_ORDERS_COLLECTION = `${PUBLIC_DATA_PATH}/mealOrders_v2`;
+const CONFIG_DOC_PATH = `${PUBLIC_DATA_PATH}/config_v2`; 
+const USERS_COLLECTION_PATH = `${PUBLIC_DATA_PATH}/users_v2`;
+const SETTINGS_DOC_PATH = `${PUBLIC_DATA_PATH}/settings_v2`;
 
 const BANNER_IMAGE_URL = "https://images.unsplash.com/photo-1559339352-11d035aa65de?q=80&w=2074&auto=format&fit=crop"; 
 
-// --- PASSWORD DI SICUREZZA ---
+// --- PASSWORD DI SICUREZZA PER IL TASTO ROSSO ---
 const DB_RESET_PASSWORD = "admin";
 
-// --- DATI INIZIALI (SEED) ---
-const INITIAL_COLLEAGUES = [
-  { 
+// --- UTENTE INIZIALE (GIOACCHINO) ---
+// Questo utente viene creato automaticamente se il DB è vuoto.
+const INITIAL_ADMIN = { 
     id: 'u_admin_gioacchino', 
     name: 'Gioacchino Battaglia', 
     email: 'gioacchino.battaglia@comune.formigine.mo.it', 
     pin: '7378', 
     isAdmin: true 
-  }
-];
+};
 
 const INITIAL_SETTINGS = {
   emailBar: "gioacchino.battaglia@comune.formigine.mo.it",
@@ -420,7 +420,7 @@ const AdminHistory = ({ db, onClose }) => {
 };
 
 // --- COMPONENTE ADMIN: PANNELLO COMPLETO (Calendario, Utenti, Settings) ---
-const AdminPanel = ({ db, currentDay, onClose, colleaguesList }) => {
+const AdminPanel = ({ db, currentDay, onClose, initialColleagues }) => {
   const [activeTab, setActiveTab] = useState('calendar'); // 'calendar', 'users', 'settings'
   const [blockedDates, setBlockedDates] = useState([]);
   const [users, setUsers] = useState([]);
@@ -434,25 +434,27 @@ const AdminPanel = ({ db, currentDay, onClose, colleaguesList }) => {
   // Feedback di salvataggio
   const [saveMsg, setSaveMsg] = useState('');
 
-  // Ordina gli utenti
   useEffect(() => {
-    if(colleaguesList) {
-        const sorted = [...colleaguesList].sort((a,b) => a.name.localeCompare(b.name));
-        setUsers(sorted);
-    }
-  }, [colleaguesList]);
+    if (!db) return;
+    
+    // LISTENER REALTIME PER GLI UTENTI
+    const unsubUsers = onSnapshot(collection(db, USERS_COLLECTION_PATH), (snap) => {
+        const loadedUsers = snap.docs.map(d => d.data());
+        loadedUsers.sort((a,b) => a.name.localeCompare(b.name));
+        setUsers(loadedUsers);
+    });
 
-  useEffect(() => {
-    const loadData = async () => {
-      const calSnap = await getDoc(doc(db, CONFIG_DOC_PATH, 'holidays'));
-      if (calSnap.exists()) setBlockedDates(calSnap.data().dates || []);
+    // LOAD CALENDAR
+    getDoc(doc(db, CONFIG_DOC_PATH, 'holidays')).then(snap => {
+        if (snap.exists()) setBlockedDates(snap.data().dates || []);
+    });
 
-      const settingsSnap = await getDoc(doc(db, SETTINGS_DOC_PATH, 'main'));
-      if (settingsSnap.exists()) {
-        setSettings(settingsSnap.data());
-      }
-    };
-    loadData();
+    // LOAD SETTINGS
+    getDoc(doc(db, SETTINGS_DOC_PATH, 'main')).then(snap => {
+        if (snap.exists()) setSettings(snap.data());
+    });
+
+    return () => unsubUsers();
   }, [db]);
 
   // --- LOGICA CALENDARIO ---
@@ -626,7 +628,7 @@ const App = () => {
   // Dati dinamici
   const [colleaguesList, setColleaguesList] = useState([]);
   const [appSettings, setAppSettings] = useState(INITIAL_SETTINGS);
-  const [dataLoaded, setDataLoaded] = useState(false); // Flag per caricamento dati Firestore
+  const [dataLoaded, setDataLoaded] = useState(false); 
 
   const [demoMode, setDemoMode] = useState(false);
 
@@ -644,7 +646,7 @@ const App = () => {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
   const [showHelp, setShowHelp] = useState(false); 
-  const [showAdminPanel, setShowAdminPanel] = useState(false); // Changed from showAdminCal
+  const [showAdminPanel, setShowAdminPanel] = useState(false); 
   const [showHistory, setShowHistory] = useState(false); 
 
   const todayDate = new Date();
@@ -668,7 +670,7 @@ const App = () => {
   const isBookingClosed = hour >= 12;
   const isEmailClosed = hour >= 13;
 
-  // FORZATURA MANUALE (DEFINITA PRIMA DELL'USO)
+  // FORZATURA MANUALE
   const forceStart = () => {
     setInitTimeout(true);
   };
@@ -688,19 +690,17 @@ const App = () => {
         });
         
         // Inserisci solo Admin Iniziale
-        INITIAL_COLLEAGUES.forEach(u => {
-            const docRef = doc(usersRef, u.id);
-            batch.set(docRef, u);
-        });
+        // FIX: Aggiunto controllo per evitare errori su collezioni vuote
+        const adminRef = doc(usersRef, INITIAL_ADMIN.id);
+        batch.set(adminRef, INITIAL_ADMIN);
         
         // Reset settings
         const settingsRef = doc(db, SETTINGS_DOC_PATH, 'main');
         batch.set(settingsRef, INITIAL_SETTINGS);
 
         await batch.commit();
-        alert("Database resettato! Ora c'è solo l'admin iniziale.");
-        // Non serve ricaricare la pagina, il listener aggiornerà la lista
-        setLoading(false);
+        alert("Database resettato! Ora c'è solo l'Admin iniziale. Ricarica la pagina.");
+        window.location.reload();
       } catch (e) {
         console.error(e);
         alert(`Errore durante il reset: ${e.message}`);
@@ -723,12 +723,11 @@ const App = () => {
       setDb(dbInstance);
       setAuth(authInstance);
 
-      // LISTENER CRUCIALE: AGGIORNA LA LISTA IN TEMPO REALE
+      // Listener in tempo reale per utenti e settings
       const subscribeToData = () => {
          // Users
          const unsubUsers = onSnapshot(collection(dbInstance, USERS_COLLECTION_PATH), (snap) => {
             const loadedUsers = snap.docs.map(d => d.data());
-            loadedUsers.sort((a,b) => a.name.localeCompare(b.name));
             setColleaguesList(loadedUsers);
             setDataLoaded(true);
          });
@@ -803,7 +802,7 @@ const App = () => {
   useEffect(() => {
     if (initTimeout && loading) {
       console.warn("Timeout caricamento: forzo avvio con dati locali.");
-      setColleaguesList(INITIAL_COLLEAGUES);
+      setColleaguesList([INITIAL_ADMIN]);
       setAppSettings(INITIAL_SETTINGS);
       setDataLoaded(true);
       setIsAuthReady(true);
@@ -1105,7 +1104,7 @@ const App = () => {
 
         {/* MODALI */}
         {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
-        {showAdminPanel && <AdminPanel db={db} currentDay={todayStr} onClose={() => setShowAdminPanel(false)} colleaguesList={colleaguesList} />}
+        {showAdminPanel && <AdminPanel db={db} currentDay={todayStr} onClose={() => setShowAdminPanel(false)} />}
         {showHistory && <AdminHistory db={db} onClose={() => setShowHistory(false)} />}
 
         {/* BANNER */}
