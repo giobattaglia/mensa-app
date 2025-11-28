@@ -278,31 +278,39 @@ const LoginScreen = ({ onLogin, demoMode, onToggleDemo, colleagues = [] }) => {
         </div>
 
         <div className="space-y-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Chi sei?</label>
-            <select 
-              value={selectedColleague}
-              onChange={(e) => { setSelectedColleague(e.target.value); setError(''); }}
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none bg-white"
-            >
-              <option value="">-- Seleziona il tuo nome --</option>
-              {safeColleagues.map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-          </div>
+          {safeColleagues.length === 0 ? (
+             <div className="text-center p-4 bg-yellow-50 rounded text-yellow-700 text-sm">
+               ⚠️ Nessun utente trovato. Contatta l'amministratore.
+             </div>
+          ) : (
+            <>
+            <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Chi sei?</label>
+                <select 
+                value={selectedColleague}
+                onChange={(e) => { setSelectedColleague(e.target.value); setError(''); }}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none bg-white"
+                >
+                <option value="">-- Seleziona il tuo nome --</option>
+                {safeColleagues.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+                </select>
+            </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">PIN Segreto</label>
-            <input 
-              type="password"
-              maxLength="4"
-              value={pin}
-              onChange={(e) => { setPin(e.target.value); setError(''); }}
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 outline-none text-center tracking-[0.5em] text-2xl font-bold"
-              placeholder="••••"
-            />
-          </div>
+            <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">PIN Segreto</label>
+                <input 
+                type="password"
+                maxLength="4"
+                value={pin}
+                onChange={(e) => { setPin(e.target.value); setError(''); }}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 outline-none text-center tracking-[0.5em] text-2xl font-bold"
+                placeholder="••••"
+                />
+            </div>
+            </>
+          )}
 
           {error && (
             <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm font-bold text-center animate-pulse">
@@ -372,7 +380,7 @@ const AdminHistory = ({ db, onClose, user }) => {
 
   const deleteDay = async () => {
       if (!user.isAdmin) return;
-      if (!confirm(`Sei SICURO di voler cancellare TUTTI gli ordini del ${selectedDate}? Questa azione è irreversibile.`)) return;
+      if (!confirm(`Sei SICURO di voler cancellare TUTTI gli ordini del ${selectedDate}? Questa azione è irreversibile e rimuoverà i buoni dal conteggio.`)) return;
       
       try {
           await deleteDoc(doc(db, PUBLIC_ORDERS_COLLECTION, selectedDate));
@@ -414,7 +422,6 @@ const AdminHistory = ({ db, onClose, user }) => {
                       <div className="flex gap-2 items-center">
                         <span className="font-bold text-gray-700">{o.userName}</span>
                         <span className="text-gray-600">{o.itemName}</span>
-                         {/* Mostra se è un ordine demo */}
                          {o.isDemo && <span className="text-[10px] bg-purple-100 text-purple-600 px-1 rounded">TEST</span>}
                       </div>
                       <span className={`text-xs px-2 py-1 rounded font-bold ${o.isTakeout ? "bg-red-100 text-red-600" : "bg-orange-100 text-orange-600"}`}>
@@ -448,13 +455,11 @@ const AdminPanel = ({ db, currentDay, onClose, colleaguesList }) => {
   const [blockedDates, setBlockedDates] = useState([]);
   const [settings, setSettings] = useState({ emailBar: '', phoneBar: '' });
   
-  // Report
-  const [reportMonth, setReportMonth] = useState(new Date().toISOString().slice(0, 7));
-  const [reportData, setReportData] = useState([]);
-  const [loadingReport, setLoadingReport] = useState(false);
-  const [totalReportMeals, setTotalReportMeals] = useState(0);
+  // Menu
   const [menu, setMenu] = useState([]);
   const [newDish, setNewDish] = useState("");
+  // Bulk Import State
+  const [bulkText, setBulkText] = useState("");
 
   useEffect(() => {
     if (!db) return;
@@ -473,69 +478,33 @@ const AdminPanel = ({ db, currentDay, onClose, colleaguesList }) => {
     });
   }, [db]);
 
-  // Load report on tab change
-  useEffect(() => {
-      if (activeTab === 'vouchers') loadVoucherReport();
-  }, [activeTab, reportMonth]);
+  // BULK IMPORT FUNCTION
+  const handleBulkImport = async () => {
+      if (!bulkText.trim()) return;
+      
+      const lines = bulkText.split('\n')
+          .map(line => line.trim())
+          .filter(line => line.length > 0);
+          
+      if (lines.length === 0) return;
 
-  const loadVoucherReport = async () => {
-    setLoadingReport(true);
-    const [year, month] = reportMonth.split('-');
-    const startDate = `${year}-${month}-01`;
-    const lastDay = new Date(year, month, 0).getDate();
-    const endDate = `${year}-${month}-${lastDay}`;
-
-    try {
-        const q = query(
-            collection(db, PUBLIC_ORDERS_COLLECTION),
-            where('mealDate', '>=', startDate),
-            where('mealDate', '<=', endDate)
-        );
-        const querySnapshot = await getDocs(q);
-        
-        const counts = {};
-        let total = 0;
-
-        // Init counts
-        COLLEAGUES_LIST.forEach(c => {
-            counts[c.id] = { name: c.name, count: 0 };
-        });
-
-        querySnapshot.forEach((doc) => {
-            const data = doc.data();
-            // CONTA SOLO SE INVIATO
-            if (data.status === 'sent') {
-                const dayOrders = data.orders || [];
-                dayOrders.forEach(order => {
-                    if (counts[order.userId]) {
-                        counts[order.userId].count++;
-                        total++;
-                    } else {
-                        // Fallback se utente rimosso dalla lista statica
-                        counts[order.userId] = { name: order.userName || 'Sconosciuto', count: 1 };
-                        total++;
-                    }
-                });
-            }
-        });
-
-        const reportArray = Object.values(counts).sort((a, b) => a.name.localeCompare(b.name));
-        setReportData(reportArray);
-        setTotalReportMeals(total);
-
-    } catch (e) {
-        console.error("Errore report:", e);
-    }
-    setLoadingReport(false);
+      // Aggiungi ai piatti esistenti o sostituisci? Di solito si aggiunge.
+      // Ma l'utente ha chiesto "Importa file", che di solito è "questo è il menu di oggi".
+      // Facciamo un append intelligente (evita duplicati).
+      const newItems = lines.filter(item => !menu.includes(item));
+      const updatedMenu = [...menu, ...newItems];
+      
+      setMenu(updatedMenu);
+      setBulkText(""); // Pulisci campo
+      
+      await setDoc(doc(db, CONFIG_DOC_PATH, 'dailyMenu'), { items: updatedMenu }, { merge: true });
+      alert(`Importati ${newItems.length} nuovi piatti!`);
   };
 
-  const exportReportCSV = () => {
-      let csv = "Nome Collega,Buoni Consumati\n";
-      reportData.forEach(row => {
-          csv += `"${row.name}",${row.count}\n`;
-      });
-      csv += `TOTALE,${totalReportMeals}\n`;
-      downloadCSV(csv, `Report_Buoni_${reportMonth}.csv`);
+  const clearMenu = async () => {
+      if(!confirm("Vuoi davvero cancellare tutto il menu del giorno?")) return;
+      setMenu([]);
+      await setDoc(doc(db, CONFIG_DOC_PATH, 'dailyMenu'), { items: [] }, { merge: true });
   };
   
   const addDish = async () => {
@@ -583,7 +552,6 @@ const AdminPanel = ({ db, currentDay, onClose, colleaguesList }) => {
         <div className="flex border-b overflow-x-auto">
           <button onClick={() => setActiveTab('calendar')} className={`flex-1 py-3 font-bold text-sm px-4 whitespace-nowrap ${activeTab === 'calendar' ? 'border-b-2 border-orange-500 text-orange-600 bg-orange-50' : 'text-gray-500 hover:bg-gray-50'}`}>📅 CALENDARIO</button>
            <button onClick={() => setActiveTab('menu')} className={`flex-1 py-3 font-bold text-sm px-4 whitespace-nowrap ${activeTab === 'menu' ? 'border-b-2 border-purple-500 text-purple-600 bg-purple-50' : 'text-gray-500 hover:bg-gray-50'}`}>🍽️ MENU</button>
-          <button onClick={() => setActiveTab('vouchers')} className={`flex-1 py-3 font-bold text-sm px-4 whitespace-nowrap ${activeTab === 'vouchers' ? 'border-b-2 border-green-500 text-green-600 bg-green-50' : 'text-gray-500 hover:bg-gray-50'}`}>📊 REPORT BUONI</button>
           <button onClick={() => setActiveTab('users')} className={`flex-1 py-3 font-bold text-sm px-4 whitespace-nowrap ${activeTab === 'users' ? 'border-b-2 border-blue-500 text-blue-600 bg-blue-50' : 'text-gray-500 hover:bg-gray-50'}`}>👥 UTENTI</button>
           <button onClick={() => setActiveTab('settings')} className={`flex-1 py-3 font-bold text-sm px-4 whitespace-nowrap ${activeTab === 'settings' ? 'border-b-2 border-gray-500 text-gray-800 bg-gray-100' : 'text-gray-500 hover:bg-gray-50'}`}>⚙️ IMPOSTAZIONI</button>
         </div>
@@ -612,8 +580,9 @@ const AdminPanel = ({ db, currentDay, onClose, colleaguesList }) => {
            
            {activeTab === 'menu' && (
              <div className="space-y-4">
-                <p className="text-sm text-gray-500">Inserisci qui i piatti del giorno per velocizzare la scelta dei colleghi.</p>
+                <p className="text-sm text-gray-500">Gestisci i piatti del giorno. Usa l'importazione massiva per liste lunghe.</p>
                 
+                {/* INSERIMENTO SINGOLO */}
                 <div className="flex gap-2">
                     <input 
                         className="border p-2 rounded flex-1" 
@@ -624,65 +593,42 @@ const AdminPanel = ({ db, currentDay, onClose, colleaguesList }) => {
                     />
                     <button onClick={addDish} className="bg-purple-600 text-white px-4 py-2 rounded font-bold">Aggiungi</button>
                 </div>
+                
+                {/* IMPORT MASSIVO */}
+                <div className="mt-6 border-t pt-4 bg-purple-50 p-4 rounded-lg">
+                    <p className="text-xs font-bold text-purple-800 mb-2">📋 IMPORTA LISTA (Copia-Incolla da WhatsApp/Excel)</p>
+                    <textarea 
+                        className="w-full border p-2 rounded text-sm h-24" 
+                        placeholder="Incolla qui la lista dei piatti (uno per riga)...&#10;Pasta al Sugo&#10;Cotoletta&#10;Insalata Mista"
+                        value={bulkText}
+                        onChange={(e) => setBulkText(e.target.value)}
+                    />
+                    <div className="flex gap-2 mt-2">
+                        <button 
+                            onClick={handleBulkImport} 
+                            className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-1 rounded text-sm font-bold flex-1"
+                        >
+                            📥 Importa Lista
+                        </button>
+                         <button 
+                            onClick={clearMenu} 
+                            className="bg-white border border-red-300 text-red-600 hover:bg-red-50 px-4 py-1 rounded text-sm font-bold"
+                        >
+                            🗑️ Svuota Menu
+                        </button>
+                    </div>
+                </div>
 
-                <div className="flex flex-wrap gap-2 mt-4">
-                    {menu.length === 0 && <p className="text-gray-400 italic text-sm">Nessun piatto inserito per oggi.</p>}
+                <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t">
+                    <p className="w-full text-xs font-bold text-gray-400 uppercase mb-2">Menu Attuale ({menu.length} piatti)</p>
+                    {menu.length === 0 && <p className="text-gray-400 italic text-sm w-full text-center">Nessun piatto inserito.</p>}
                     {menu.map((dish, i) => (
-                        <div key={i} className="bg-purple-50 border border-purple-200 rounded-full px-3 py-1 flex items-center gap-2">
-                            <span className="text-purple-800 font-medium">{dish}</span>
-                            <button onClick={() => removeDish(i)} className="text-purple-400 hover:text-red-600 font-bold">&times;</button>
+                        <div key={i} className="bg-white border border-gray-200 rounded-full px-3 py-1 flex items-center gap-2 shadow-sm">
+                            <span className="text-gray-700 font-medium text-sm">{dish}</span>
+                            <button onClick={() => removeDish(i)} className="text-gray-400 hover:text-red-600 font-bold ml-1">&times;</button>
                         </div>
                     ))}
                 </div>
-             </div>
-           )}
-
-           {activeTab === 'vouchers' && (
-             <div className="space-y-4">
-                <div className="bg-green-50 p-4 rounded-lg border border-green-100 flex justify-between items-center">
-                   <div>
-                     <label className="block text-xs font-bold text-green-800 uppercase mb-1">Periodo Report</label>
-                     <input 
-                        type="month" 
-                        value={reportMonth} 
-                        onChange={(e) => setReportMonth(e.target.value)} 
-                        className="border p-2 rounded font-bold text-gray-700"
-                     />
-                   </div>
-                   <div className="text-right">
-                      <span className="block text-3xl font-bold text-green-700">{totalReportMeals}</span>
-                      <span className="text-xs text-green-600 uppercase font-bold">Totale Pasti (Confermati)</span>
-                   </div>
-                </div>
-                
-                <div className="flex justify-end">
-                    <button onClick={exportReportCSV} className="text-xs bg-blue-100 text-blue-700 px-3 py-1 rounded font-bold hover:bg-blue-200 flex items-center gap-1">
-                        📥 Scarica Report CSV
-                    </button>
-                </div>
-
-                {loadingReport ? (
-                    <p className="text-center text-gray-400 py-8">Calcolo report in corso...</p>
-                ) : (
-                    <div className="border rounded overflow-hidden">
-                        <table className="w-full text-sm text-left">
-                            <thead className="bg-gray-100 text-gray-600 uppercase text-xs">
-                                <tr>
-                                    <th className="p-3">Collega</th>
-                                    <th className="p-3 text-right">Buoni Usati</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y">
-                                {reportData.map(user => (
-                                    <tr key={user.name} className="hover:bg-gray-50">
-                                        <td className="p-3 font-medium text-gray-800">{user.name}</td>
-                                        <td className="p-3 text-right font-bold text-blue-600">{user.count}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
              </div>
            )}
 
@@ -747,6 +693,7 @@ const App = () => {
   const [showHelp, setShowHelp] = useState(false); 
   const [showAdminPanel, setShowAdminPanel] = useState(false); 
   const [showHistory, setShowHistory] = useState(false); 
+  // REMOVED showUserStats
 
   const todayDate = new Date();
   const todayStr = formatDate(todayDate);
@@ -929,7 +876,7 @@ const App = () => {
     });
 
     return () => unsubscribe();
-  }, [db, isAuthReady, todayStr, user, actingAsUser]);
+  }, [db, isAuthReady, todayStr, user, actingAsUser, isShopOpen, demoMode]);
 
   const handleLogin = (colleague) => {
     setUser(colleague);
@@ -996,7 +943,6 @@ const App = () => {
       waterChoice: selectedWater,
       isTakeout: diningChoice === 'asporto',
       timestamp: Date.now(),
-      isDemo: demoMode // Flag per ordini demo
     };
 
     try {
@@ -1089,7 +1035,6 @@ const App = () => {
         
         {/* TOP BAR */}
         <div className="absolute top-4 right-4 z-50 flex gap-2">
-          
           {user.isAdmin && (
             <>
               <button onClick={() => setShowAdminPanel(true)} className="bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold px-3 py-1 rounded-full shadow border border-orange-400">
@@ -1117,7 +1062,7 @@ const App = () => {
         {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
         {showAdminPanel && <AdminPanel db={db} currentDay={todayStr} onClose={() => setShowAdminPanel(false)} colleaguesList={COLLEAGUES_LIST} />}
         {showHistory && <AdminHistory db={db} onClose={() => setShowHistory(false)} user={user} />}
-
+        
         {/* BANNER */}
         <header 
           className="relative text-white overflow-hidden border-b-4 border-green-800 bg-cover bg-center"
@@ -1247,16 +1192,19 @@ const App = () => {
                     
                     {/* MENU RAPIDO */}
                     {dailyMenu.length > 0 && (
-                        <div className="flex flex-wrap gap-2 mb-3">
-                            {dailyMenu.map((dish, i) => (
-                                <button 
-                                    key={i}
-                                    onClick={() => { setDishName(dish); if(errors.dishName) setErrors({...errors, dishName: false}); }}
-                                    className="bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 text-xs font-bold px-3 py-1.5 rounded-full transition-colors"
-                                >
-                                    {dish}
-                                </button>
-                            ))}
+                        <div className="mb-3">
+                            <p className="text-xs text-gray-500 mb-1 font-bold">Menu del Giorno ({dailyMenu.length} piatti):</p>
+                            <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto border p-2 rounded bg-gray-50">
+                                {dailyMenu.map((dish, i) => (
+                                    <button 
+                                        key={i}
+                                        onClick={() => { setDishName(dish); if(errors.dishName) setErrors({...errors, dishName: false}); }}
+                                        className="bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 text-xs font-bold px-3 py-1.5 rounded-full transition-colors flex-shrink-0"
+                                    >
+                                        {dish}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
                     )}
 
