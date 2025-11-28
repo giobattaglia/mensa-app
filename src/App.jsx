@@ -25,7 +25,7 @@ const SETTINGS_DOC_PATH = `${PUBLIC_DATA_PATH}/settings`;
 
 const BANNER_IMAGE_URL = "https://images.unsplash.com/photo-1559339352-11d035aa65de?q=80&w=2074&auto=format&fit=crop"; 
 
-// --- 👥 LISTA COLLEGHI UFFICIALE ---
+// --- 👥 LISTA COLLEGHI UFFICIALE (GESTITA DA CODICE) ---
 const COLLEAGUES_LIST = [
   { id: 'u1', name: 'Barbara Zucchi', email: 'b.zucchi@comune.formigine.mo.it', pin: '1111', isAdmin: false },
   { id: 'u2', name: 'Chiara Italiani', email: 'c_italiani@comune.formigine.mo.it', pin: '2222', isAdmin: false },
@@ -70,19 +70,6 @@ const ALLOWED_DATES_LIST = generateAllowedDates();
 const getNextOpenDay = (fromDateStr) => {
   const todayStr = fromDateStr || formatDate(new Date());
   return ALLOWED_DATES_LIST.find(d => d > todayStr) || 'Data futura non trovata';
-};
-
-// Helper CSV
-const downloadCSV = (content, filename) => {
-    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', filename);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
 };
 
 const LoadingSpinner = ({ text, onForceStart }) => (
@@ -495,12 +482,6 @@ const AdminPanel = ({ db, currentDay, onClose, colleaguesList, onToggleForceOpen
   const [blockedDates, setBlockedDates] = useState([]);
   const [settings, setSettings] = useState({ emailBar: '', phoneBar: '' });
   
-  // Report
-  const [reportMonth, setReportMonth] = useState(new Date().toISOString().slice(0, 7));
-  const [reportData, setReportData] = useState([]);
-  const [loadingReport, setLoadingReport] = useState(false);
-  const [totalReportMeals, setTotalReportMeals] = useState(0);
-
   useEffect(() => {
     if (!db) return;
     
@@ -512,71 +493,6 @@ const AdminPanel = ({ db, currentDay, onClose, colleaguesList, onToggleForceOpen
         if (snap.exists()) setSettings(snap.data());
     });
   }, [db]);
-
-  // Load report on tab change
-  useEffect(() => {
-      if (activeTab === 'vouchers') loadVoucherReport();
-  }, [activeTab, reportMonth]);
-
-  const loadVoucherReport = async () => {
-    setLoadingReport(true);
-    const [year, month] = reportMonth.split('-');
-    const startDate = `${year}-${month}-01`;
-    const lastDay = new Date(year, month, 0).getDate();
-    const endDate = `${year}-${month}-${lastDay}`;
-
-    try {
-        const q = query(
-            collection(db, PUBLIC_ORDERS_COLLECTION),
-            where('mealDate', '>=', startDate),
-            where('mealDate', '<=', endDate)
-        );
-        const querySnapshot = await getDocs(q);
-        
-        const counts = {};
-        let total = 0;
-
-        // Init counts
-        COLLEAGUES_LIST.forEach(c => {
-            counts[c.id] = { name: c.name, count: 0 };
-        });
-
-        querySnapshot.forEach((doc) => {
-            const data = doc.data();
-            // CONTA SOLO SE INVIATO
-            if (data.status === 'sent') {
-                const dayOrders = data.orders || [];
-                dayOrders.forEach(order => {
-                    if (counts[order.userId]) {
-                        counts[order.userId].count++;
-                        total++;
-                    } else {
-                        // Fallback se utente rimosso dalla lista statica
-                        counts[order.userId] = { name: order.userName || 'Sconosciuto', count: 1 };
-                        total++;
-                    }
-                });
-            }
-        });
-
-        const reportArray = Object.values(counts).sort((a, b) => a.name.localeCompare(b.name));
-        setReportData(reportArray);
-        setTotalReportMeals(total);
-
-    } catch (e) {
-        console.error("Errore report:", e);
-    }
-    setLoadingReport(false);
-  };
-
-  const exportReportCSV = () => {
-      let csv = "Nome Collega,Buoni Consumati\n";
-      reportData.forEach(row => {
-          csv += `"${row.name}",${row.count}\n`;
-      });
-      csv += `TOTALE,${totalReportMeals}\n`;
-      downloadCSV(csv, `Report_Buoni_${reportMonth}.csv`);
-  };
 
   const toggleDate = async (dateStr) => {
     let newDates = [];
@@ -596,11 +512,12 @@ const AdminPanel = ({ db, currentDay, onClose, colleaguesList, onToggleForceOpen
     } catch (e) { console.error(e); alert("Errore impostazioni"); }
   };
 
-  // Funzione per generare mail credenziali
+  // Funzione per generare mail credenziali (FIXED: USA GMAIL WEB)
   const sendCreds = (user) => {
       const subject = encodeURIComponent("Credenziali App Pranzo");
       const body = encodeURIComponent(`Ciao ${user.name},\n\necco il tuo PIN per accedere all'app dei pasti: ${user.pin}\n\nSe vuoi cambiarlo, contattami.\n\nSaluti,\nGioacchino`);
-      window.location.href = `mailto:${user.email}?subject=${subject}&body=${body}`;
+      const gmailLink = `https://mail.google.com/mail/?view=cm&fs=1&to=${user.email}&su=${subject}&body=${body}`;
+      window.open(gmailLink, '_blank');
   };
 
   const upcoming = ALLOWED_DATES_LIST.filter(d => d >= currentDay).slice(0, 10);
@@ -610,96 +527,53 @@ const AdminPanel = ({ db, currentDay, onClose, colleaguesList, onToggleForceOpen
       <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full h-[85vh] flex flex-col relative overflow-hidden">
         <div className="p-4 border-b flex justify-between items-center bg-gray-50">
            <h2 className="text-xl font-bold text-gray-800">⚙️ Pannello Amministrazione</h2>
-           {/* TOGGLE FORZA APERTURA */}
-           <div className="flex items-center gap-2 mr-4">
-               <label className="text-xs font-bold text-purple-700 cursor-pointer">
-                   <input 
-                    type="checkbox" 
-                    checked={isForceOpen} 
-                    onChange={(e) => onToggleForceOpen(e.target.checked)}
-                    className="mr-1"
-                   />
-                   🔓 Forza Apertura (Test)
-               </label>
-           </div>
            <button onClick={onClose} className="text-gray-500 hover:text-red-600 font-bold text-xl">&times;</button>
         </div>
         
         <div className="flex border-b overflow-x-auto">
           <button onClick={() => setActiveTab('calendar')} className={`flex-1 py-3 font-bold text-sm px-4 whitespace-nowrap ${activeTab === 'calendar' ? 'border-b-2 border-orange-500 text-orange-600 bg-orange-50' : 'text-gray-500 hover:bg-gray-50'}`}>📅 CALENDARIO</button>
-          <button onClick={() => setActiveTab('vouchers')} className={`flex-1 py-3 font-bold text-sm px-4 whitespace-nowrap ${activeTab === 'vouchers' ? 'border-b-2 border-green-500 text-green-600 bg-green-50' : 'text-gray-500 hover:bg-gray-50'}`}>📊 REPORT BUONI</button>
           <button onClick={() => setActiveTab('users')} className={`flex-1 py-3 font-bold text-sm px-4 whitespace-nowrap ${activeTab === 'users' ? 'border-b-2 border-blue-500 text-blue-600 bg-blue-50' : 'text-gray-500 hover:bg-gray-50'}`}>👥 UTENTI</button>
           <button onClick={() => setActiveTab('settings')} className={`flex-1 py-3 font-bold text-sm px-4 whitespace-nowrap ${activeTab === 'settings' ? 'border-b-2 border-gray-500 text-gray-800 bg-gray-100' : 'text-gray-500 hover:bg-gray-50'}`}>⚙️ IMPOSTAZIONI</button>
         </div>
 
         <div className="p-6 overflow-y-auto flex-1">
            {activeTab === 'calendar' && (
-             <div>
-               <p className="text-sm text-gray-500 mb-4">Clicca su una data per chiudere l'ufficio (Ferie/Festa). Le date <span className="text-red-600 font-bold">barrate e rosse</span> sono CHIUSE.</p>
-               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {upcoming.map(date => {
-                  const isBlocked = blockedDates.includes(date);
-                  const dateObj = new Date(date);
-                  return (
-                    <button 
-                      key={date}
-                      onClick={() => toggleDate(date)}
-                      className={`p-3 rounded border text-sm font-bold transition-all ${isBlocked ? 'bg-red-100 border-red-500 text-red-700 line-through' : 'bg-green-50 border-green-200 text-green-700 hover:bg-green-100'}`}
-                    >
-                      {dateObj.toLocaleDateString('it-IT', { weekday: 'short', day: '2-digit', month: 'short' })}
-                    </button>
-                  )
-                })}
-              </div>
-             </div>
-           )}
-
-           {activeTab === 'vouchers' && (
-             <div className="space-y-4">
-                <div className="bg-green-50 p-4 rounded-lg border border-green-100 flex justify-between items-center">
-                   <div>
-                     <label className="block text-xs font-bold text-green-800 uppercase mb-1">Periodo Report</label>
-                     <input 
-                        type="month" 
-                        value={reportMonth} 
-                        onChange={(e) => setReportMonth(e.target.value)} 
-                        className="border p-2 rounded font-bold text-gray-700"
-                     />
-                   </div>
-                   <div className="text-right">
-                      <span className="block text-3xl font-bold text-green-700">{totalReportMeals}</span>
-                      <span className="text-xs text-green-600 uppercase font-bold">Totale Pasti (Confermati)</span>
-                   </div>
-                </div>
-                
-                <div className="flex justify-end">
-                    <button onClick={exportReportCSV} className="text-xs bg-blue-100 text-blue-700 px-3 py-1 rounded font-bold hover:bg-blue-200 flex items-center gap-1">
-                        📥 Scarica Report CSV
-                    </button>
-                </div>
-
-                {loadingReport ? (
-                    <p className="text-center text-gray-400 py-8">Calcolo report in corso...</p>
-                ) : (
-                    <div className="border rounded overflow-hidden">
-                        <table className="w-full text-sm text-left">
-                            <thead className="bg-gray-100 text-gray-600 uppercase text-xs">
-                                <tr>
-                                    <th className="p-3">Collega</th>
-                                    <th className="p-3 text-right">Buoni Usati</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y">
-                                {reportData.map(user => (
-                                    <tr key={user.name} className="hover:bg-gray-50">
-                                        <td className="p-3 font-medium text-gray-800">{user.name}</td>
-                                        <td className="p-3 text-right font-bold text-blue-600">{user.count}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+             <div className="space-y-6">
+               <div className="bg-purple-50 p-4 rounded-lg border border-purple-200 flex items-center justify-between">
+                    <div>
+                        <p className="text-purple-800 font-bold text-sm">Stato Giornata Attuale:</p>
+                        <p className={`text-xs font-bold ${isForceOpen ? 'text-green-600' : 'text-red-500'}`}>
+                            {isForceOpen ? "🔓 SBLOCCATO (Forzato Aperto)" : "🔴 BLOCCATO (Regole Standard)"}
+                        </p>
                     </div>
-                )}
+                    <button 
+                        onClick={() => onToggleForceOpen(!isForceOpen)}
+                        className={`px-4 py-2 rounded text-xs font-bold transition-all ${isForceOpen ? 'bg-green-600 text-white hover:bg-green-700' : 'bg-red-100 text-red-600 border border-red-300 hover:bg-red-200'}`}
+                    >
+                        {isForceOpen ? "Blocca Giornata" : "🔓 Sblocca / Forza Apertura"}
+                    </button>
+               </div>
+               
+               <hr className="border-gray-200" />
+               
+               <div>
+                   <p className="text-sm text-gray-500 mb-4">Clicca su una data per chiudere l'ufficio (Ferie/Festa).</p>
+                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {upcoming.map(date => {
+                    const isBlocked = blockedDates.includes(date);
+                    const dateObj = new Date(date);
+                    return (
+                        <button 
+                        key={date}
+                        onClick={() => toggleDate(date)}
+                        className={`p-3 rounded border text-sm font-bold transition-all ${isBlocked ? 'bg-red-100 border-red-500 text-red-700 line-through' : 'bg-green-50 border-green-200 text-green-700 hover:bg-green-100'}`}
+                        >
+                        {dateObj.toLocaleDateString('it-IT', { weekday: 'short', day: '2-digit', month: 'short' })}
+                        </button>
+                    )
+                    })}
+                   </div>
+              </div>
              </div>
            )}
 
@@ -708,8 +582,7 @@ const AdminPanel = ({ db, currentDay, onClose, colleaguesList, onToggleForceOpen
                <div className="p-4 bg-blue-50 rounded border border-blue-100 text-center">
                    <p className="text-blue-800 font-bold text-sm mb-1">Gestione Utenti</p>
                    <p className="text-xs text-blue-600">
-                       La lista utenti è gestita nel codice per sicurezza. 
-                       Qui puoi inviare rapidamente il PIN via mail.
+                       La lista utenti è gestita nel codice. Qui puoi inviare il PIN.
                    </p>
                </div>
                
@@ -785,7 +658,6 @@ const App = () => {
   const [showHelp, setShowHelp] = useState(false); 
   const [showAdminPanel, setShowAdminPanel] = useState(false); 
   const [showHistory, setShowHistory] = useState(false); 
-  const [showUserStats, setShowUserStats] = useState(false); 
   const [showMenuManager, setShowMenuManager] = useState(false); 
 
   const todayDate = new Date();
@@ -841,7 +713,6 @@ const App = () => {
       };
 
       const checkDateAccess = async () => {
-        // Se non è un giorno consentito, chiudi. (Ma Admin Override bypasserà questo nel render)
         const isBaseValid = ALLOWED_DATES_LIST.includes(todayStr);
         if (!isBaseValid) { 
           setIsShopOpen(false);
@@ -900,8 +771,10 @@ const App = () => {
     return () => clearTimeout(timeoutId);
   }, []);
 
+  // Forzatura manuale caricamento
   useEffect(() => {
     if (initTimeout && loading) {
+      console.warn("Timeout caricamento: forzo avvio con dati locali.");
       setAppSettings(INITIAL_SETTINGS);
       setDataLoaded(true);
       setIsAuthReady(true);
@@ -909,6 +782,7 @@ const App = () => {
     }
   }, [initTimeout, loading]);
 
+  // Restore user session
   useEffect(() => {
       if (dataLoaded && isAuthReady && !user) {
           const savedUserId = sessionStorage.getItem('mealAppUser');
@@ -922,6 +796,7 @@ const App = () => {
       }
   }, [dataLoaded, isAuthReady]);
 
+  // LISTENER ORDINI
   useEffect(() => {
     if (!db || !isAuthReady) return;
     
@@ -1074,6 +949,8 @@ const App = () => {
     const subject = encodeURIComponent(`Ordine Tardivo/Personale - ${todayDate.toLocaleDateString('it-IT')}`);
     // Messaggio precompilato semplice per ordine singolo
     const body = encodeURIComponent(`Ciao, sono ${user.name}.\nVorrei ordinare per oggi:\n\n- [SCRIVI QUI IL PIATTO]\n\nGrazie!`);
+    
+    // URL specifico per GMAIL WEB
     const gmailLink = `https://mail.google.com/mail/?view=cm&fs=1&to=${appSettings.emailBar}&su=${subject}&body=${body}`;
     window.open(gmailLink, '_blank');
   };
@@ -1092,6 +969,8 @@ const App = () => {
   return (
     <div className={`min-h-screen font-sans p-2 sm:p-6 pb-20 transition-colors duration-500 ${'bg-gray-100'}`}>
       
+      {/* DEMO BANNER E ALTRI RIMOSSI */}
+      
       <div className={`max-w-5xl mx-auto bg-white shadow-xl rounded-2xl overflow-hidden relative transition-all duration-300 ${''}`}>
         
         {/* TOP BAR */}
@@ -1099,11 +978,6 @@ const App = () => {
           {/* NEW BUTTON: MENU MANAGER FOR ALL */}
           <button onClick={() => setShowMenuManager(true)} className="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold px-3 py-1 rounded-full shadow border border-purple-500 flex items-center gap-1">
             📝 Hai il Menu?
-          </button>
-
-          {/* NEW BUTTON: MY VOUCHERS */}
-           <button onClick={() => setShowUserStats(true)} className="bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold px-3 py-1 rounded-full shadow border border-teal-500 flex items-center gap-1">
-            📊 I Miei Buoni
           </button>
 
           {user.isAdmin && (
@@ -1134,7 +1008,6 @@ const App = () => {
         {showAdminPanel && <AdminPanel db={db} currentDay={todayStr} onClose={() => setShowAdminPanel(false)} colleaguesList={COLLEAGUES_LIST} onToggleForceOpen={setAdminOverride} isForceOpen={adminOverride} />}
         {showHistory && <AdminHistory db={db} onClose={() => setShowHistory(false)} user={user} />}
         {showMenuManager && <PublicMenuManager db={db} onClose={() => setShowMenuManager(false)} currentMenu={dailyMenu} />}
-        {showUserStats && <UserStatsModal db={db} user={user} onClose={() => setShowUserStats(false)} />}
 
         {/* BANNER */}
         <header 
