@@ -278,39 +278,31 @@ const LoginScreen = ({ onLogin, demoMode, onToggleDemo, colleagues = [] }) => {
         </div>
 
         <div className="space-y-6">
-          {safeColleagues.length === 0 ? (
-             <div className="text-center p-4 bg-yellow-50 rounded text-yellow-700 text-sm">
-               ⚠️ Nessun utente trovato. Contatta l'amministratore.
-             </div>
-          ) : (
-            <>
-            <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Chi sei?</label>
-                <select 
-                value={selectedColleague}
-                onChange={(e) => { setSelectedColleague(e.target.value); setError(''); }}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none bg-white"
-                >
-                <option value="">-- Seleziona il tuo nome --</option>
-                {safeColleagues.map(c => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-                </select>
-            </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Chi sei?</label>
+            <select 
+              value={selectedColleague}
+              onChange={(e) => { setSelectedColleague(e.target.value); setError(''); }}
+              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none bg-white"
+            >
+              <option value="">-- Seleziona il tuo nome --</option>
+              {safeColleagues.map(c => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </div>
 
-            <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">PIN Segreto</label>
-                <input 
-                type="password"
-                maxLength="4"
-                value={pin}
-                onChange={(e) => { setPin(e.target.value); setError(''); }}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 outline-none text-center tracking-[0.5em] text-2xl font-bold"
-                placeholder="••••"
-                />
-            </div>
-            </>
-          )}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">PIN Segreto</label>
+            <input 
+              type="password"
+              maxLength="4"
+              value={pin}
+              onChange={(e) => { setPin(e.target.value); setError(''); }}
+              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 outline-none text-center tracking-[0.5em] text-2xl font-bold"
+              placeholder="••••"
+            />
+          </div>
 
           {error && (
             <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm font-bold text-center animate-pulse">
@@ -478,24 +470,24 @@ const AdminPanel = ({ db, currentDay, onClose, colleaguesList }) => {
     });
   }, [db]);
 
-  // BULK IMPORT FUNCTION
+  // BULK IMPORT FUNCTION (PULIZIA E MIGLIORAMENTO)
   const handleBulkImport = async () => {
       if (!bulkText.trim()) return;
       
       const lines = bulkText.split('\n')
           .map(line => line.trim())
+          // Rimuovi caratteri elenco puntato all'inizio (es: "- ", "* ", "1. ")
+          .map(line => line.replace(/^[-*•\d\.]+\s*/, ''))
           .filter(line => line.length > 0);
           
       if (lines.length === 0) return;
 
-      // Aggiungi ai piatti esistenti o sostituisci? Di solito si aggiunge.
-      // Ma l'utente ha chiesto "Importa file", che di solito è "questo è il menu di oggi".
-      // Facciamo un append intelligente (evita duplicati).
+      // Uniamo i nuovi piatti a quelli esistenti evitando duplicati
       const newItems = lines.filter(item => !menu.includes(item));
       const updatedMenu = [...menu, ...newItems];
       
       setMenu(updatedMenu);
-      setBulkText(""); // Pulisci campo
+      setBulkText(""); 
       
       await setDoc(doc(db, CONFIG_DOC_PATH, 'dailyMenu'), { items: updatedMenu }, { merge: true });
       alert(`Importati ${newItems.length} nuovi piatti!`);
@@ -580,7 +572,7 @@ const AdminPanel = ({ db, currentDay, onClose, colleaguesList }) => {
            
            {activeTab === 'menu' && (
              <div className="space-y-4">
-                <p className="text-sm text-gray-500">Gestisci i piatti del giorno. Usa l'importazione massiva per liste lunghe.</p>
+                <p className="text-sm text-gray-500">Gestisci i piatti del giorno. Puoi usare l'importazione massiva per incollare una lista da WhatsApp o Excel.</p>
                 
                 {/* INSERIMENTO SINGOLO */}
                 <div className="flex gap-2">
@@ -596,10 +588,10 @@ const AdminPanel = ({ db, currentDay, onClose, colleaguesList }) => {
                 
                 {/* IMPORT MASSIVO */}
                 <div className="mt-6 border-t pt-4 bg-purple-50 p-4 rounded-lg">
-                    <p className="text-xs font-bold text-purple-800 mb-2">📋 IMPORTA LISTA (Copia-Incolla da WhatsApp/Excel)</p>
+                    <p className="text-xs font-bold text-purple-800 mb-2">📋 IMPORTA LISTA (Copia-Incolla)</p>
                     <textarea 
                         className="w-full border p-2 rounded text-sm h-24" 
-                        placeholder="Incolla qui la lista dei piatti (uno per riga)...&#10;Pasta al Sugo&#10;Cotoletta&#10;Insalata Mista"
+                        placeholder="Incolla qui la lista dei piatti (uno per riga)...&#10;- Pasta al Sugo&#10;* Cotoletta&#10;1. Insalata Mista"
                         value={bulkText}
                         onChange={(e) => setBulkText(e.target.value)}
                     />
@@ -608,7 +600,7 @@ const AdminPanel = ({ db, currentDay, onClose, colleaguesList }) => {
                             onClick={handleBulkImport} 
                             className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-1 rounded text-sm font-bold flex-1"
                         >
-                            📥 Importa Lista
+                            📥 Importa Lista Pulita
                         </button>
                          <button 
                             onClick={clearMenu} 
@@ -617,6 +609,7 @@ const AdminPanel = ({ db, currentDay, onClose, colleaguesList }) => {
                             🗑️ Svuota Menu
                         </button>
                     </div>
+                    <p className="text-[10px] text-gray-500 mt-1">Il sistema rimuoverà automaticamente elenchi puntati, numeri e trattini iniziali.</p>
                 </div>
 
                 <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t">
@@ -673,7 +666,7 @@ const App = () => {
   const [appSettings, setAppSettings] = useState(INITIAL_SETTINGS);
   const [dataLoaded, setDataLoaded] = useState(false); 
   
-  const [dailyMenu, setDailyMenu] = useState([]); // Piatti del giorno
+  const [dailyMenu, setDailyMenu] = useState([]); 
 
   const [demoMode, setDemoMode] = useState(false);
 
@@ -693,13 +686,11 @@ const App = () => {
   const [showHelp, setShowHelp] = useState(false); 
   const [showAdminPanel, setShowAdminPanel] = useState(false); 
   const [showHistory, setShowHistory] = useState(false); 
-  // REMOVED showUserStats
 
   const todayDate = new Date();
   const todayStr = formatDate(todayDate);
   const [blockedDates, setBlockedDates] = useState([]);
   const [isShopOpen, setIsShopOpen] = useState(true);
-  // Timeout di sicurezza
   const [initTimeout, setInitTimeout] = useState(false);
 
   const [time, setTime] = useState(new Date());
@@ -711,12 +702,10 @@ const App = () => {
   const hour = demoMode ? 10 : time.getHours();
   const minute = demoMode ? 0 : time.getMinutes();
 
-  // LOGICA ORARIA
   const isLateWarning = (hour === 10 && minute >= 30) || (hour === 11);
   const isBookingClosed = hour >= 12;
   const isEmailClosed = hour >= 13;
 
-  // FORZATURA MANUALE
   const forceStart = () => {
     setInitTimeout(true);
   };
@@ -742,7 +731,6 @@ const App = () => {
             if (snap.exists()) setAppSettings(snap.data());
          });
          
-         // Daily Menu Listener
          const unsubMenu = onSnapshot(doc(dbInstance, CONFIG_DOC_PATH, 'dailyMenu'), (snap) => {
              if (snap.exists()) setDailyMenu(snap.data().items || []);
          });
@@ -751,7 +739,6 @@ const App = () => {
       };
 
       const checkDateAccess = async () => {
-        // FIX DEMO: Se demo è attiva, forza APERTO.
         if (demoMode) {
             setIsShopOpen(true);
             setLoading(false);
@@ -790,7 +777,6 @@ const App = () => {
         }
       };
 
-      // Sequenza di avvio
       initAuth().then(() => {
         subscribeToData();
         checkDateAccess();
@@ -816,7 +802,6 @@ const App = () => {
     return () => clearTimeout(timeoutId);
   }, [demoMode]);
 
-  // Forzatura manuale caricamento
   useEffect(() => {
     if (initTimeout && loading) {
       console.warn("Timeout caricamento: forzo avvio con dati locali.");
@@ -827,7 +812,6 @@ const App = () => {
     }
   }, [initTimeout, loading]);
 
-  // Restore user session
   useEffect(() => {
       if (dataLoaded && isAuthReady && !user) {
           const savedUserId = sessionStorage.getItem('mealAppUser');
@@ -841,7 +825,6 @@ const App = () => {
       }
   }, [dataLoaded, isAuthReady]);
 
-  // LISTENER ORDINI
   useEffect(() => {
     if (!db || !isAuthReady) return;
     
@@ -943,6 +926,7 @@ const App = () => {
       waterChoice: selectedWater,
       isTakeout: diningChoice === 'asporto',
       timestamp: Date.now(),
+      isDemo: demoMode // Flag per ordini demo
     };
 
     try {
@@ -992,10 +976,7 @@ const App = () => {
 
   const openLateEmail = () => {
     const subject = encodeURIComponent(`Ordine Tardivo/Personale - ${todayDate.toLocaleDateString('it-IT')}`);
-    // Messaggio precompilato semplice per ordine singolo
     const body = encodeURIComponent(`Ciao, sono ${user.name}.\nVorrei ordinare per oggi:\n\n- [SCRIVI QUI IL PIATTO]\n\nGrazie!`);
-    
-    // URL specifico per GMAIL WEB
     const gmailLink = `https://mail.google.com/mail/?view=cm&fs=1&to=${appSettings.emailBar}&su=${subject}&body=${body}`;
     window.open(gmailLink, '_blank');
   };
@@ -1035,6 +1016,7 @@ const App = () => {
         
         {/* TOP BAR */}
         <div className="absolute top-4 right-4 z-50 flex gap-2">
+
           {user.isAdmin && (
             <>
               <button onClick={() => setShowAdminPanel(true)} className="bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold px-3 py-1 rounded-full shadow border border-orange-400">
