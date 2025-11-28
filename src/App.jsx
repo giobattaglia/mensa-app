@@ -26,21 +26,18 @@ const SETTINGS_DOC_PATH = `${PUBLIC_DATA_PATH}/settings`;
 
 const BANNER_IMAGE_URL = "https://images.unsplash.com/photo-1559339352-11d035aa65de?q=80&w=2074&auto=format&fit=crop"; 
 
-// --- PASSWORD DI EMERGENZA ---
+// --- PASSWORD DI SICUREZZA PER IL TASTO ROSSO ---
 const DB_RESET_PASSWORD = "admin";
 
-// --- DATI INIZIALI (SEED) ---
-// HO PULITO LA LISTA: ORA C'È SOLO L'ADMIN.
-// Se premi "Ripristina DB", rimarrà solo questo utente.
-const INITIAL_COLLEAGUES = [
-  { 
+// --- UTENTE INIZIALE (GIOACCHINO) ---
+// Questo utente viene creato SOLO se premi "RIPRISTINA DB".
+const INITIAL_ADMIN = { 
     id: 'u_admin_gioacchino', 
     name: 'Gioacchino Battaglia', 
     email: 'gioacchino.battaglia@comune.formigine.mo.it', 
     pin: '7378', 
     isAdmin: true 
-  }
-];
+};
 
 const INITIAL_SETTINGS = {
   emailBar: "gioacchino.battaglia@comune.formigine.mo.it",
@@ -116,7 +113,6 @@ const ClosedScreen = ({ nextDate, onEnableDemo }) => {
           <p className="text-2xl text-green-900 font-serif capitalize">{formattedNext}</p>
         </div>
 
-        {/* TASTO DEMO PER TESTARE */}
         <div className="border-t pt-4">
           <p className="text-xs text-gray-500 mb-2">Devi fare una prova tecnica?</p>
           <button 
@@ -249,7 +245,7 @@ const LoginScreen = ({ onLogin, demoMode, onToggleDemo, colleagues = [], onReset
   };
   
   const handleResetClick = () => {
-      const pwd = prompt("ATTENZIONE: Stai per cancellare TUTTI gli utenti e resettare il database allo stato iniziale (Solo Admin). Inserisci password:");
+      const pwd = prompt("ATTENZIONE: Stai per cancellare TUTTI gli utenti e ripristinare solo Gioacchino Battaglia. Inserisci password:");
       if (pwd === DB_RESET_PASSWORD) {
           onResetDB();
       } else {
@@ -423,10 +419,9 @@ const AdminHistory = ({ db, onClose }) => {
 };
 
 // --- COMPONENTE ADMIN: PANNELLO COMPLETO (Calendario, Utenti, Settings) ---
-const AdminPanel = ({ db, currentDay, onClose, onUsersUpdate }) => {
+const AdminPanel = ({ db, currentDay, onClose, colleaguesList }) => {
   const [activeTab, setActiveTab] = useState('calendar'); // 'calendar', 'users', 'settings'
   const [blockedDates, setBlockedDates] = useState([]);
-  const [users, setUsers] = useState([]);
   const [settings, setSettings] = useState({ emailBar: '', phoneBar: '' });
   
   // Stato per nuovo utente
@@ -437,27 +432,20 @@ const AdminPanel = ({ db, currentDay, onClose, onUsersUpdate }) => {
   // Feedback di salvataggio
   const [saveMsg, setSaveMsg] = useState('');
 
+  // Ordina gli utenti
+  const sortedUsers = [...colleaguesList].sort((a,b) => a.name.localeCompare(b.name));
+
   useEffect(() => {
-    if (!db) return;
-    
-    // LISTENER REALTIME PER GLI UTENTI
-    const unsubUsers = onSnapshot(collection(db, USERS_COLLECTION_PATH), (snap) => {
-        const loadedUsers = snap.docs.map(d => d.data());
-        loadedUsers.sort((a,b) => a.name.localeCompare(b.name));
-        setUsers(loadedUsers);
-    });
+    const loadData = async () => {
+      const calSnap = await getDoc(doc(db, CONFIG_DOC_PATH, 'holidays'));
+      if (calSnap.exists()) setBlockedDates(calSnap.data().dates || []);
 
-    // LOAD CALENDAR
-    getDoc(doc(db, CONFIG_DOC_PATH, 'holidays')).then(snap => {
-        if (snap.exists()) setBlockedDates(snap.data().dates || []);
-    });
-
-    // LOAD SETTINGS
-    getDoc(doc(db, SETTINGS_DOC_PATH, 'main')).then(snap => {
-        if (snap.exists()) setSettings(snap.data());
-    });
-
-    return () => unsubUsers();
+      const settingsSnap = await getDoc(doc(db, SETTINGS_DOC_PATH, 'main'));
+      if (settingsSnap.exists()) {
+        setSettings(settingsSnap.data());
+      }
+    };
+    loadData();
   }, [db]);
 
   // --- LOGICA CALENDARIO ---
@@ -481,7 +469,6 @@ const AdminPanel = ({ db, currentDay, onClose, onUsersUpdate }) => {
     
     try {
       await setDoc(doc(db, USERS_COLLECTION_PATH, id), userToAdd);
-      // Non serve aggiornare lo stato 'users' manualmente, ci pensa onSnapshot
       setNewUser({ name: '', email: '', pin: '', isAdmin: false });
       setSaveMsg('✅ Utente salvato!');
       setTimeout(() => setSaveMsg(''), 2000);
@@ -526,7 +513,7 @@ const AdminPanel = ({ db, currentDay, onClose, onUsersUpdate }) => {
         
         <div className="flex border-b">
           <button onClick={() => setActiveTab('calendar')} className={`flex-1 py-3 font-bold text-sm ${activeTab === 'calendar' ? 'border-b-2 border-orange-500 text-orange-600 bg-orange-50' : 'text-gray-500 hover:bg-gray-50'}`}>📅 CALENDARIO</button>
-          <button onClick={() => setActiveTab('users')} className={`flex-1 py-3 font-bold text-sm ${activeTab === 'users' ? 'border-b-2 border-blue-500 text-blue-600 bg-blue-50' : 'text-gray-500 hover:bg-gray-50'}`}>👥 UTENTI ({users.length})</button>
+          <button onClick={() => setActiveTab('users')} className={`flex-1 py-3 font-bold text-sm ${activeTab === 'users' ? 'border-b-2 border-blue-500 text-blue-600 bg-blue-50' : 'text-gray-500 hover:bg-gray-50'}`}>👥 UTENTI ({sortedUsers.length})</button>
           <button onClick={() => setActiveTab('settings')} className={`flex-1 py-3 font-bold text-sm ${activeTab === 'settings' ? 'border-b-2 border-gray-500 text-gray-800 bg-gray-100' : 'text-gray-500 hover:bg-gray-50'}`}>⚙️ IMPOSTAZIONI</button>
         </div>
 
@@ -571,9 +558,9 @@ const AdminPanel = ({ db, currentDay, onClose, onUsersUpdate }) => {
                    {saveMsg && <p className="text-center text-green-600 text-xs font-bold mt-2">{saveMsg}</p>}
                 </div>
 
-                {/* USER LIST */}
+                {/* USER LIST (LISTA VIVA) */}
                 <div className="space-y-2">
-                  {users.map(u => (
+                  {sortedUsers.map(u => (
                     <div key={u.id} className="flex justify-between items-center p-2 border rounded hover:bg-gray-50">
                        {editingUser && editingUser.id === u.id ? (
                          <div className="flex-1 grid grid-cols-4 gap-2">
@@ -632,7 +619,7 @@ const App = () => {
   // Dati dinamici
   const [colleaguesList, setColleaguesList] = useState([]);
   const [appSettings, setAppSettings] = useState(INITIAL_SETTINGS);
-  const [dataLoaded, setDataLoaded] = useState(false); // Flag per caricamento dati Firestore
+  const [dataLoaded, setDataLoaded] = useState(false); 
 
   const [demoMode, setDemoMode] = useState(false);
 
@@ -650,7 +637,7 @@ const App = () => {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
   const [showHelp, setShowHelp] = useState(false); 
-  const [showAdminPanel, setShowAdminPanel] = useState(false); // Changed from showAdminCal
+  const [showAdminPanel, setShowAdminPanel] = useState(false); 
   const [showHistory, setShowHistory] = useState(false); 
 
   const todayDate = new Date();
@@ -673,23 +660,6 @@ const App = () => {
   const isLateWarning = (hour === 10 && minute >= 30) || (hour === 11);
   const isBookingClosed = hour >= 12;
   const isEmailClosed = hour >= 13;
-
-  // RELOAD TRIGGER
-  const reloadData = async () => {
-     if(!db) return;
-     // Ricarica utenti
-     const usersSnap = await getDocs(collection(db, USERS_COLLECTION_PATH));
-     if (!usersSnap.empty) {
-        const loadedUsers = usersSnap.docs.map(d => d.data());
-        loadedUsers.sort((a,b) => a.name.localeCompare(b.name));
-        setColleaguesList(loadedUsers);
-     }
-     // Ricarica settings
-     const settingsSnap = await getDoc(doc(db, SETTINGS_DOC_PATH, 'main'));
-     if (settingsSnap.exists()) {
-        setAppSettings(settingsSnap.data());
-     }
-  };
 
   // FORZATURA MANUALE (DEFINITA PRIMA DELL'USO)
   const forceStart = () => {
@@ -743,12 +713,11 @@ const App = () => {
       setDb(dbInstance);
       setAuth(authInstance);
 
-      // Listener in tempo reale per utenti e settings (QUESTO ERA IL PEZZO CHIAVE MANCANTE)
+      // Listener in tempo reale per utenti e settings
       const subscribeToData = () => {
          // Users
          const unsubUsers = onSnapshot(collection(dbInstance, USERS_COLLECTION_PATH), (snap) => {
             const loadedUsers = snap.docs.map(d => d.data());
-            loadedUsers.sort((a,b) => a.name.localeCompare(b.name));
             setColleaguesList(loadedUsers);
             setDataLoaded(true);
          });
@@ -823,6 +792,7 @@ const App = () => {
   useEffect(() => {
     if (initTimeout && loading) {
       console.warn("Timeout caricamento: forzo avvio con dati locali.");
+      // In caso di timeout, assumiamo db vuoto ma non scriviamo
       setColleaguesList(INITIAL_COLLEAGUES);
       setAppSettings(INITIAL_SETTINGS);
       setDataLoaded(true);
@@ -1125,7 +1095,7 @@ const App = () => {
 
         {/* MODALI */}
         {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
-        {showAdminPanel && <AdminPanel db={db} currentDay={todayStr} onClose={() => setShowAdminPanel(false)} initialColleagues={colleaguesList} onUsersUpdate={reloadData} />}
+        {showAdminPanel && <AdminPanel db={db} currentDay={todayStr} onClose={() => setShowAdminPanel(false)} colleaguesList={colleaguesList} />}
         {showHistory && <AdminHistory db={db} onClose={() => setShowHistory(false)} />}
 
         {/* BANNER */}
