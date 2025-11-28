@@ -335,7 +335,7 @@ const LoginScreen = ({ onLogin, demoMode, onToggleDemo, colleagues = [], onReset
              onClick={handleResetClick}
              className="text-[10px] text-red-400 hover:text-red-600 underline mt-2 font-bold bg-red-50 px-2 py-1 rounded"
            >
-             ⚠️ RIPRISTINA UTENTI DA CODICE
+             ⚠️ RIPRISTINA DB
            </button>
         </div>
       </div>
@@ -422,6 +422,7 @@ const AdminHistory = ({ db, onClose }) => {
 const AdminPanel = ({ db, currentDay, onClose, colleaguesList }) => {
   const [activeTab, setActiveTab] = useState('calendar'); // 'calendar', 'users', 'settings'
   const [blockedDates, setBlockedDates] = useState([]);
+  const [users, setUsers] = useState([]);
   const [settings, setSettings] = useState({ emailBar: '', phoneBar: '' });
   
   // Stato per nuovo utente
@@ -433,7 +434,12 @@ const AdminPanel = ({ db, currentDay, onClose, colleaguesList }) => {
   const [saveMsg, setSaveMsg] = useState('');
 
   // Ordina gli utenti
-  const sortedUsers = [...colleaguesList].sort((a,b) => a.name.localeCompare(b.name));
+  useEffect(() => {
+    if(colleaguesList) {
+        const sorted = [...colleaguesList].sort((a,b) => a.name.localeCompare(b.name));
+        setUsers(sorted);
+    }
+  }, [colleaguesList]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -513,7 +519,7 @@ const AdminPanel = ({ db, currentDay, onClose, colleaguesList }) => {
         
         <div className="flex border-b">
           <button onClick={() => setActiveTab('calendar')} className={`flex-1 py-3 font-bold text-sm ${activeTab === 'calendar' ? 'border-b-2 border-orange-500 text-orange-600 bg-orange-50' : 'text-gray-500 hover:bg-gray-50'}`}>📅 CALENDARIO</button>
-          <button onClick={() => setActiveTab('users')} className={`flex-1 py-3 font-bold text-sm ${activeTab === 'users' ? 'border-b-2 border-blue-500 text-blue-600 bg-blue-50' : 'text-gray-500 hover:bg-gray-50'}`}>👥 UTENTI ({sortedUsers.length})</button>
+          <button onClick={() => setActiveTab('users')} className={`flex-1 py-3 font-bold text-sm ${activeTab === 'users' ? 'border-b-2 border-blue-500 text-blue-600 bg-blue-50' : 'text-gray-500 hover:bg-gray-50'}`}>👥 UTENTI ({users.length})</button>
           <button onClick={() => setActiveTab('settings')} className={`flex-1 py-3 font-bold text-sm ${activeTab === 'settings' ? 'border-b-2 border-gray-500 text-gray-800 bg-gray-100' : 'text-gray-500 hover:bg-gray-50'}`}>⚙️ IMPOSTAZIONI</button>
         </div>
 
@@ -558,9 +564,9 @@ const AdminPanel = ({ db, currentDay, onClose, colleaguesList }) => {
                    {saveMsg && <p className="text-center text-green-600 text-xs font-bold mt-2">{saveMsg}</p>}
                 </div>
 
-                {/* USER LIST (LISTA VIVA) */}
+                {/* USER LIST */}
                 <div className="space-y-2">
-                  {sortedUsers.map(u => (
+                  {users.map(u => (
                     <div key={u.id} className="flex justify-between items-center p-2 border rounded hover:bg-gray-50">
                        {editingUser && editingUser.id === u.id ? (
                          <div className="flex-1 grid grid-cols-4 gap-2">
@@ -619,7 +625,7 @@ const App = () => {
   // Dati dinamici
   const [colleaguesList, setColleaguesList] = useState([]);
   const [appSettings, setAppSettings] = useState(INITIAL_SETTINGS);
-  const [dataLoaded, setDataLoaded] = useState(false); 
+  const [dataLoaded, setDataLoaded] = useState(false); // Flag per caricamento dati Firestore
 
   const [demoMode, setDemoMode] = useState(false);
 
@@ -666,10 +672,11 @@ const App = () => {
     setInitTimeout(true);
   };
 
+  // HANDLE RESET COMPLETO
   const handleHardReset = async () => {
       setLoading(true);
       try {
-        // 1. Cancella collezione users
+        // 1. Cancella collezione users (leggi e cancella uno a uno)
         const usersRef = collection(db, USERS_COLLECTION_PATH);
         const snap = await getDocs(usersRef);
         
@@ -689,7 +696,7 @@ const App = () => {
         batch.set(settingsRef, INITIAL_SETTINGS);
 
         await batch.commit();
-        alert("Database resettato con successo! Ricarica la pagina.");
+        alert("Database resettato! Ora c'è solo l'admin iniziale. Ricarica la pagina.");
         window.location.reload();
       } catch (e) {
         console.error(e);
@@ -713,7 +720,7 @@ const App = () => {
       setDb(dbInstance);
       setAuth(authInstance);
 
-      // Listener in tempo reale per utenti e settings
+      // Listener in tempo reale per utenti e settings (Sincronizzazione Automatica)
       const subscribeToData = () => {
          // Users
          const unsubUsers = onSnapshot(collection(dbInstance, USERS_COLLECTION_PATH), (snap) => {
@@ -792,7 +799,6 @@ const App = () => {
   useEffect(() => {
     if (initTimeout && loading) {
       console.warn("Timeout caricamento: forzo avvio con dati locali.");
-      // In caso di timeout, assumiamo db vuoto ma non scriviamo
       setColleaguesList(INITIAL_COLLEAGUES);
       setAppSettings(INITIAL_SETTINGS);
       setDataLoaded(true);
