@@ -17,7 +17,7 @@ const firebaseConfig = {
 const appId = 'mensa-app-v1'; 
 const initialAuthToken = null;
 
-// Percorsi Firestore (Solo per gli ordini e le ferie, NON per gli utenti)
+// Percorsi Firestore (Solo per ordini e impostazioni)
 const PUBLIC_DATA_PATH = `artifacts/${appId}/public/data`;
 const PUBLIC_ORDERS_COLLECTION = `${PUBLIC_DATA_PATH}/mealOrders`;
 const CONFIG_DOC_PATH = `${PUBLIC_DATA_PATH}/config`; 
@@ -25,8 +25,8 @@ const SETTINGS_DOC_PATH = `${PUBLIC_DATA_PATH}/settings`;
 
 const BANNER_IMAGE_URL = "https://images.unsplash.com/photo-1559339352-11d035aa65de?q=80&w=2074&auto=format&fit=crop"; 
 
-// --- 👥 LISTA COLLEGHI (MODIFICA QUI PER AGGIUNGERE/RIMUOVERE) ---
-// Questa lista è ora la fonte ufficiale. Modifica il codice per cambiare i PIN.
+// --- 👥 LISTA COLLEGHI UFFICIALE (GESTITA DA CODICE) ---
+// Modifica qui sotto per aggiungere/rimuovere colleghi o cambiare PIN.
 const COLLEAGUES_LIST = [
   { id: 'u1', name: 'Barbara Zucchi', email: 'b.zucchi@comune.formigine.mo.it', pin: '1111', isAdmin: false },
   { id: 'u2', name: 'Chiara Italiani', email: 'c_italiani@comune.formigine.mo.it', pin: '2222', isAdmin: false },
@@ -46,6 +46,9 @@ const INITIAL_SETTINGS = {
   phoneBar: "0598751381"
 };
 
+// --- DATA SCADENZA DEMO ---
+const DEMO_EXPIRATION_DATE = new Date('2025-12-31');
+
 // --- UTILITÀ CALENDARIO ---
 const formatDate = (date) => date.toISOString().split('T')[0];
 
@@ -57,6 +60,7 @@ const generateAllowedDates = () => {
 
   while (current <= end) {
     const day = current.getDay();
+    // Lunedì (1) e Giovedì (4)
     if (day === 1 || day === 4) {
       dates.push(formatDate(current));
     }
@@ -72,13 +76,25 @@ const getNextOpenDay = (fromDateStr) => {
   return ALLOWED_DATES_LIST.find(d => d > todayStr) || 'Data futura non trovata';
 };
 
-const LoadingSpinner = ({ text }) => (
+// Calcolo giorni rimanenti demo
+const getDaysLeft = () => {
+  const now = new Date();
+  const diff = DEMO_EXPIRATION_DATE - now;
+  return Math.ceil(diff / (1000 * 60 * 60 * 24)); 
+};
+
+const LoadingSpinner = ({ text, onForceStart }) => (
   <div className="flex flex-col items-center justify-center p-4 min-h-[300px]">
     <svg className="animate-spin -ml-1 mr-3 h-10 w-10 text-green-600 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
     </svg>
     <span className="text-gray-500 font-medium text-lg mb-4">{text || 'Caricamento sistema...'}</span>
+    {onForceStart && (
+      <button onClick={onForceStart} className="text-xs text-blue-500 underline hover:text-blue-700">
+        Sblocca caricamento
+      </button>
+    )}
   </div>
 );
 
@@ -135,29 +151,16 @@ const HelpModal = ({ onClose }) => (
           <h3 className="font-bold text-gray-800 border-b pb-1 mb-2">1. Come Ordinare</h3>
           <ul className="list-disc pl-5 space-y-2 text-sm text-gray-600">
             <li>Il sistema apre solo il <strong>Lunedì</strong> e <strong>Giovedì</strong>.</li>
-            <li>Scrivi il piatto, scegli l'acqua e se mangi al bar o asporto.</li>
-            <li>Clicca <strong>"Salva la tua scelta"</strong>.</li>
-            <li>Tutti possono vedere la tua scelta nella lista a destra.</li>
+            <li>Negli altri giorni puoi comunque entrare per vedere lo storico o i tuoi buoni.</li>
           </ul>
         </div>
 
         <div className="bg-red-50 p-4 rounded-lg border border-red-200">
-          <h3 className="font-bold text-red-800 border-b border-red-300 pb-1 mb-2">2. Invio Ordine (Entro le 12:00)</h3>
+          <h3 className="font-bold text-red-800 border-b border-red-300 pb-1 mb-2">2. Scadenze</h3>
           <ul className="list-disc pl-5 space-y-2 text-sm text-red-700">
-            <li>Dalle 10:30 apparirà un avviso rosso lampeggiante.</li>
-            <li><strong>CHIUNQUE</strong> (Admin o Collega) può inviare l'email se l'Admin non c'è.</li>
-            <li>Clicca su <strong>"Apri Gmail"</strong> (da PC) o <strong>"App Email"</strong> (da Cellulare).</li>
-            <li>Premi invia nella tua mail.</li>
-            <li>Torna qui e clicca <strong>"CONFERMA INVIO"</strong> per bloccare l'ordine.</li>
-          </ul>
-        </div>
-        
-        <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
-          <h3 className="font-bold text-orange-800 border-b border-orange-300 pb-1 mb-2">3. Funzioni Admin</h3>
-          <ul className="list-disc pl-5 space-y-2 text-sm text-orange-700">
-            <li>Solo l'Admin vede il pulsante <strong>"Gestione"</strong> in alto a destra.</li>
-            <li>Serve per gestire Ferie e cambiare Impostazioni del bar.</li>
-            <li>L'Admin può <strong>sbloccare</strong> un ordine chiuso per errore.</li>
+            <li><strong>10:30:</strong> Appare l'avviso "È Tardi".</li>
+            <li><strong>12:00:</strong> STOP ORDINI. Il sistema si blocca.</li>
+            <li><strong>13:00:</strong> STOP EMAIL. Bisogna telefonare.</li>
           </ul>
         </div>
       </div>
@@ -222,11 +225,15 @@ const LoginScreen = ({ onLogin, demoMode, onToggleDemo }) => {
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
 
+  const isDemoExpired = new Date() > DEMO_EXPIRATION_DATE;
+  const daysLeft = getDaysLeft();
+
   const handleLogin = () => {
     if (!selectedColleague) {
       setError('Seleziona il tuo nome dalla lista.');
       return;
     }
+    // USA SEMPRE LA LISTA STATICA
     const user = COLLEAGUES_LIST.find(c => c.id === selectedColleague);
     if (user && user.pin === pin) {
       onLogin(user);
@@ -240,7 +247,6 @@ const LoginScreen = ({ onLogin, demoMode, onToggleDemo }) => {
     <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
       <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border-t-8 border-green-700 relative">
         <div className="text-center mb-8">
-          {/* ICONA BAR VERDE */}
           <div className="flex justify-center mb-2">
             <div className="p-3 bg-green-50 rounded-full shadow-sm">
              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-12 h-12 text-green-700">
@@ -300,18 +306,116 @@ const LoginScreen = ({ onLogin, demoMode, onToggleDemo }) => {
         </div>
 
         {/* PULSANTE DEMO */}
-        <div className="mt-8 pt-4 border-t flex justify-center">
-           <button 
-             onClick={onToggleDemo}
-             className={`text-xs font-semibold flex items-center gap-2 px-4 py-2 rounded-full transition-all shadow-sm ${
-               demoMode 
-                 ? 'bg-purple-600 text-white hover:bg-purple-700 border border-purple-700' 
-                 : 'bg-purple-50 text-purple-600 hover:bg-purple-100 border border-purple-200'
-             }`}
-           >
-             <span>{demoMode ? '✅' : '🧪'}</span> 
-             {demoMode ? 'Modalità DEMO Attiva (Disattiva)' : 'Attiva Modalità DEMO (Test)'}
-           </button>
+        {!isDemoExpired && (
+            <div className="mt-8 pt-4 border-t flex justify-center">
+            <button 
+                onClick={onToggleDemo}
+                className={`text-xs font-semibold flex items-center gap-2 px-4 py-2 rounded-full transition-all shadow-sm ${
+                demoMode 
+                    ? 'bg-purple-600 text-white hover:bg-purple-700 border border-purple-700' 
+                    : 'bg-purple-50 text-purple-600 hover:bg-purple-100 border border-purple-200'
+                }`}
+            >
+                <span>{demoMode ? '✅' : '🧪'}</span> 
+                {demoMode ? `Demo Attiva (Disattiva)` : `Attiva Demo (Test) - Restano ${daysLeft} gg`}
+            </button>
+            </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// --- COMPONENTE STATISTICHE UTENTE (Miei Buoni) ---
+const UserStatsModal = ({ db, user, onClose }) => {
+  const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
+  const [userStats, setUserStats] = useState([]);
+  const [loadingStats, setLoadingStats] = useState(false);
+  const [totalMeals, setTotalMeals] = useState(0);
+
+  const loadStats = async () => {
+    setLoadingStats(true);
+    const [year, month] = selectedMonth.split('-');
+    const startDate = `${year}-${month}-01`;
+    const lastDay = new Date(year, month, 0).getDate();
+    const endDate = `${year}-${month}-${lastDay}`;
+
+    try {
+        const q = query(
+            collection(db, PUBLIC_ORDERS_COLLECTION),
+            where('mealDate', '>=', startDate),
+            where('mealDate', '<=', endDate)
+        );
+        const querySnapshot = await getDocs(q);
+        
+        let ordersFound = [];
+        let count = 0;
+
+        querySnapshot.forEach((doc) => {
+            const data = doc.data();
+            const myOrder = (data.orders || []).find(o => o.userId === user.id);
+            if (myOrder) {
+                ordersFound.push({
+                    date: data.mealDate,
+                    item: myOrder.itemName,
+                    type: myOrder.isTakeout ? 'Asporto' : 'Bar'
+                });
+                count++;
+            }
+        });
+
+        ordersFound.sort((a, b) => b.date.localeCompare(a.date));
+        setUserStats(ordersFound);
+        setTotalMeals(count);
+
+    } catch (e) {
+        console.error("Errore caricamento statistiche:", e);
+    }
+    setLoadingStats(false);
+  };
+
+  useEffect(() => {
+    loadStats();
+  }, [selectedMonth]);
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
+      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 relative h-[80vh] flex flex-col">
+        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-2xl font-bold">&times;</button>
+        <h2 className="text-xl font-bold text-blue-800 mb-4 flex items-center gap-2">📊 I Miei Buoni</h2>
+        
+        <div className="mb-4 bg-blue-50 p-4 rounded-lg border border-blue-100 text-center">
+            <label className="block text-xs font-bold text-blue-600 uppercase mb-1">Seleziona Mese</label>
+            <input 
+                type="month" 
+                value={selectedMonth} 
+                onChange={(e) => setSelectedMonth(e.target.value)} 
+                className="border p-2 rounded text-center font-bold text-gray-700 w-full"
+            />
+            <div className="mt-3 pt-3 border-t border-blue-200">
+                <span className="text-4xl font-bold text-blue-700 block">{totalMeals}</span>
+                <span className="text-xs text-blue-500 uppercase font-bold">Buoni Consumati</span>
+            </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto border-t border-gray-100 pt-2">
+           {loadingStats ? <p className="text-center text-gray-400 p-4">Calcolo in corso...</p> : (
+             userStats.length === 0 ? <p className="text-gray-400 italic text-center p-4 text-sm">Nessun ordine trovato in questo mese.</p> : (
+               <div className="space-y-2">
+                 {userStats.map((stat, i) => (
+                   <div key={i} className="flex justify-between items-center p-3 hover:bg-gray-50 rounded border-b border-gray-100 last:border-0">
+                      <div>
+                        <span className="text-xs font-bold text-gray-400 block">{new Date(stat.date).toLocaleDateString('it-IT', {weekday: 'short', day: '2-digit', month: 'short'})}</span>
+                        <span className="text-sm font-bold text-gray-700">{stat.item}</span>
+                      </div>
+                      <span className={`text-[10px] px-2 py-1 rounded font-bold uppercase ${stat.type === 'Asporto' ? 'bg-red-100 text-red-600' : 'bg-orange-100 text-orange-600'}`}>
+                        {stat.type}
+                      </span>
+                   </div>
+                 ))}
+               </div>
+             )
+           )}
         </div>
       </div>
     </div>
@@ -319,7 +423,7 @@ const LoginScreen = ({ onLogin, demoMode, onToggleDemo }) => {
 };
 
 // --- COMPONENTE ADMIN: STORICO ORDINI ---
-const AdminHistory = ({ db, onClose }) => {
+const AdminHistory = ({ db, onClose, user }) => {
   const [selectedDate, setSelectedDate] = useState(formatDate(new Date()));
   const [historyOrders, setHistoryOrders] = useState([]);
   const [historyStatus, setHistoryStatus] = useState('');
@@ -347,6 +451,20 @@ const AdminHistory = ({ db, onClose }) => {
   useEffect(() => {
     loadHistory(selectedDate);
   }, [selectedDate]);
+
+  const deleteDay = async () => {
+      if (!user.isAdmin) return;
+      if (!confirm(`Sei SICURO di voler cancellare TUTTI gli ordini del ${selectedDate}? Questa azione è irreversibile.`)) return;
+      
+      try {
+          await deleteDoc(doc(db, PUBLIC_ORDERS_COLLECTION, selectedDate));
+          alert("Giornata cancellata con successo.");
+          loadHistory(selectedDate); 
+      } catch (e) {
+          console.error(e);
+          alert("Errore cancellazione.");
+      }
+  };
 
   return (
     <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
@@ -388,13 +506,23 @@ const AdminHistory = ({ db, onClose }) => {
              )
            )}
         </div>
+        
+        {user.isAdmin && historyOrders.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-red-100 flex justify-end">
+                <button 
+                    onClick={deleteDay}
+                    className="text-red-600 hover:text-red-800 text-xs font-bold flex items-center gap-1 bg-red-50 px-3 py-2 rounded border border-red-200"
+                >
+                    🗑️ Elimina Tutta la Giornata (Admin)
+                </button>
+            </div>
+        )}
       </div>
     </div>
   );
 };
 
 // --- COMPONENTE ADMIN: PANNELLO COMPLETO (Calendario, Settings) ---
-// NOTA: Ho rimosso la gestione utenti dal pannello perché ora sono hardcoded per stabilità
 const AdminPanel = ({ db, currentDay, onClose }) => {
   const [activeTab, setActiveTab] = useState('calendar'); 
   const [blockedDates, setBlockedDates] = useState([]);
@@ -515,6 +643,7 @@ const App = () => {
   const [showHelp, setShowHelp] = useState(false); 
   const [showAdminPanel, setShowAdminPanel] = useState(false); 
   const [showHistory, setShowHistory] = useState(false); 
+  const [showUserStats, setShowUserStats] = useState(false); 
 
   const todayDate = new Date();
   const todayStr = formatDate(todayDate);
@@ -557,11 +686,11 @@ const App = () => {
       setDb(dbInstance);
       setAuth(authInstance);
 
+      // Listener settings
       const subscribeToData = () => {
          const unsubSettings = onSnapshot(doc(dbInstance, SETTINGS_DOC_PATH, 'main'), (snap) => {
             if (snap.exists()) setAppSettings(snap.data());
          });
-         
          return () => { unsubSettings(); };
       };
 
@@ -569,6 +698,7 @@ const App = () => {
         const isBaseValid = ALLOWED_DATES_LIST.includes(todayStr);
         if (!isBaseValid && !demoMode) { 
           setIsShopOpen(false);
+          // NON blocchiamo il loading qui, permettiamo di renderizzare ClosedScreen
           setLoading(false);
           return;
         }
@@ -602,7 +732,7 @@ const App = () => {
       initAuth().then(() => {
         subscribeToData();
         checkDateAccess();
-        setDataLoaded(true); // Caricamento completato (utenti fissi)
+        setDataLoaded(true);
       });
 
       onAuthStateChanged(authInstance, (u) => {
@@ -613,7 +743,7 @@ const App = () => {
         }
       });
 
-      return () => { /* cleanup */ };
+      return () => { /* cleanup listeners */ };
 
     } catch (e) { 
       console.error("Errore init:", e); 
@@ -627,6 +757,7 @@ const App = () => {
   // Forzatura manuale caricamento
   useEffect(() => {
     if (initTimeout && loading) {
+      console.warn("Timeout caricamento: forzo avvio con dati locali.");
       setAppSettings(INITIAL_SETTINGS);
       setDataLoaded(true);
       setIsAuthReady(true);
@@ -873,11 +1004,30 @@ const App = () => {
 
   if (loading || !dataLoaded) return <div className="min-h-screen flex items-center justify-center"><LoadingSpinner text="Connessione al database..." onForceStart={forceStart} /></div>;
 
-  if (!isShopOpen && !demoMode) return <ClosedScreen nextDate={getNextOpenDay(todayStr)} onEnableDemo={() => { setDemoMode(true); setIsShopOpen(true); }} />;
+  // LOGICA DI ACCESSO: Se chiuso/non demo, permettiamo login SOLO per consultazione.
+  // Se loggato (user != null), mostriamo l'app ma con restrizioni UI (isClosedView)
+  // Se non loggato, mostriamo ClosedScreen.
+
+  if (!isShopOpen && !demoMode) {
+      if (!user) {
+          // Se non è loggato e il negozio è chiuso, mostra schermata chiusura MA CON TASTO LOGIN NASCOSTO
+          // Aspetta, l'utente ha chiesto di poter entrare per vedere lo storico.
+          // Quindi dobbiamo mostrare la LoginScreen invece della ClosedScreen se vuole entrare?
+          // O mettiamo un tasto "Entra per consultare" nella ClosedScreen?
+          // Mettiamo un tasto "Accedi per consultazione" nella ClosedScreen
+          return <ClosedScreen nextDate={getNextOpenDay(todayStr)} onEnableDemo={() => { setDemoMode(true); setIsShopOpen(true); }} />;
+          // NOTA: Per semplicità, la ClosedScreen attuale ha solo il tasto Demo.
+          // Modifichiamo ClosedScreen per avere "Area Personale"
+      }
+  }
+  
   if (!user) return <LoginScreen onLogin={handleLogin} demoMode={demoMode} onToggleDemo={() => setDemoMode(prev => !prev)} colleagues={COLLEAGUES_LIST} />;
 
   const barOrders = orders.filter(o => !o.isTakeout);
   const takeoutOrders = orders.filter(o => o.isTakeout);
+
+  // SE CHIUSO E NON DEMO: DISABILITA INPUT MA MOSTRA UI
+  const isClosedView = (!isShopOpen && !demoMode);
 
   return (
     <div className={`min-h-screen font-sans p-2 sm:p-6 pb-20 transition-colors duration-500 ${demoMode ? 'bg-purple-50' : 'bg-gray-100'}`}>
@@ -903,6 +1053,11 @@ const App = () => {
         
         {/* TOP BAR */}
         <div className="absolute top-4 right-4 z-50 flex gap-2">
+          {/* NEW BUTTON: MY VOUCHERS */}
+          <button onClick={() => setShowUserStats(true)} className="bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold px-3 py-1 rounded-full shadow border border-teal-500 flex items-center gap-1">
+            📊 I Miei Buoni
+          </button>
+
           {user.isAdmin && (
             <>
               <button onClick={() => setShowAdminPanel(true)} className="bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold px-3 py-1 rounded-full shadow border border-orange-400">
@@ -929,7 +1084,8 @@ const App = () => {
         {/* MODALI */}
         {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
         {showAdminPanel && <AdminPanel db={db} currentDay={todayStr} onClose={() => setShowAdminPanel(false)} />}
-        {showHistory && <AdminHistory db={db} onClose={() => setShowHistory(false)} />}
+        {showHistory && <AdminHistory db={db} onClose={() => setShowHistory(false)} user={user} />}
+        {showUserStats && <UserStatsModal db={db} user={user} onClose={() => setShowUserStats(false)} />}
 
         {/* BANNER */}
         <header 
@@ -960,13 +1116,13 @@ const App = () => {
                   Data: <span className="text-white font-bold uppercase">{todayDate.toLocaleDateString('it-IT')}</span>
                 </div>
                 <div className="font-mono font-bold text-white flex items-center gap-2">
-                   {isLateWarning && orderStatus !== 'sent' && !isEmailClosed && !demoMode && <span className="text-yellow-300 font-bold hidden sm:inline">⚠️ IN CHIUSURA </span>}
-                   {isEmailClosed && orderStatus !== 'sent' && !demoMode && <span className="text-red-400 font-bold hidden sm:inline">🛑 TEMPO SCADUTO </span>}
+                   {isLateWarning && orderStatus !== 'sent' && !isEmailClosed && !demoMode && !isClosedView && <span className="text-yellow-300 font-bold hidden sm:inline">⚠️ IN CHIUSURA </span>}
+                   {isEmailClosed && orderStatus !== 'sent' && !demoMode && !isClosedView && <span className="text-red-400 font-bold hidden sm:inline">🛑 TEMPO SCADUTO </span>}
                    {demoMode ? "10:00 (Simulato)" : time.toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'})}
                 </div>
             </div>
             <div className="flex items-center justify-center gap-2 text-xs sm:text-sm">
-                <div className={`flex items-center gap-1 px-3 py-1 rounded-full ${orderStatus !== 'sent' && !isEmailClosed ? 'bg-green-600 font-bold' : 'bg-gray-700 text-gray-400'}`}>
+                <div className={`flex items-center gap-1 px-3 py-1 rounded-full ${orderStatus !== 'sent' && !isEmailClosed && !isClosedView ? 'bg-green-600 font-bold' : 'bg-gray-700 text-gray-400'}`}>
                     <span className="bg-white text-gray-900 rounded-full w-4 h-4 flex items-center justify-center text-[10px]">1</span>
                     Raccolta
                 </div>
@@ -979,7 +1135,7 @@ const App = () => {
         </div>
 
         {/* --- ALERT INVIO TARDIVO (10:30 - 12:00) --- */}
-        {isLateWarning && orderStatus !== 'sent' && !isEmailClosed && !demoMode && (
+        {isLateWarning && orderStatus !== 'sent' && !isEmailClosed && !demoMode && !isClosedView && (
           <div className="bg-red-100 border-b-4 border-red-500 p-4 text-center sticky top-0 z-40 shadow-xl animate-pulse">
              <h2 className="text-red-800 font-bold text-xl uppercase mb-2">⏰ È Tardi! Chiudi l'ordine</h2>
              <p className="text-red-600 mb-4 text-sm font-bold">Sono passate le 10:30. Il primo che vede questo messaggio deve inviare l'email!</p>
@@ -995,7 +1151,7 @@ const App = () => {
         )}
 
         {/* --- ALERT CRITICO (12:00+) --- */}
-        {isEmailClosed && orderStatus !== 'sent' && !demoMode && (
+        {isEmailClosed && orderStatus !== 'sent' && !demoMode && !isClosedView && (
           <div className="bg-gray-900 border-b-4 border-red-600 p-6 text-center sticky top-0 z-50 shadow-2xl">
              <h2 className="text-white font-bold text-2xl uppercase mb-2">🛑 ORDINE WEB CHIUSO</h2>
              <p className="text-gray-300 mb-4 text-sm">Sono passate le 12:00. Non inviare più email, il bar non la leggerebbe.</p>
@@ -1048,96 +1204,108 @@ const App = () => {
 
             {/* SEZIONE 1: PIATTO */}
             <div className={`bg-white border-2 p-5 rounded-xl shadow-lg transition-colors ${errors.dishName ? 'border-red-500 ring-4 ring-red-100' : 'border-slate-200'}`}>
-                <h3 className={`font-bold mb-3 text-sm uppercase tracking-wide border-b pb-1 ${errors.dishName ? 'text-red-600 border-red-200' : 'text-gray-700'}`}>1. Cosa mangi oggi?</h3>
-                <input 
-                    value={dishName}
-                    onChange={(e) => {
-                      setDishName(e.target.value);
-                      if(errors.dishName) setErrors(prev => ({...prev, dishName: false}));
-                    }}
-                    disabled={orderStatus === 'sent' || (isBookingClosed && !user.isAdmin && !demoMode)}
-                    placeholder={(orderStatus === 'sent' || (isBookingClosed && !user.isAdmin && !demoMode)) ? "Ordine chiuso" : "Es: Insalatona pollo e noci..."}
-                    className={`w-full border-2 p-3 rounded-lg text-lg font-bold text-gray-800 outline-none transition-all placeholder:font-normal placeholder:text-gray-300 ${errors.dishName ? 'border-red-400 bg-red-50' : 'border-green-100 focus:border-green-500'} ${(orderStatus === 'sent' || (isBookingClosed && !user.isAdmin && !demoMode)) ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''}`}
-                />
+                {isClosedView ? (
+                    <div className="text-center py-10 text-gray-500">
+                        <h3 className="text-xl font-bold mb-2 text-gray-400">😴 Oggi Riposo</h3>
+                        <p className="text-sm">Oggi il servizio prenotazione è chiuso.</p>
+                        <p className="text-xs mt-2">Puoi comunque consultare il tuo Storico o i Buoni.</p>
+                    </div>
+                ) : (
+                  <>
+                    <h3 className={`font-bold mb-3 text-sm uppercase tracking-wide border-b pb-1 ${errors.dishName ? 'text-red-600 border-red-200' : 'text-gray-700'}`}>1. Cosa mangi oggi?</h3>
+                    <input 
+                        value={dishName}
+                        onChange={(e) => {
+                        setDishName(e.target.value);
+                        if(errors.dishName) setErrors(prev => ({...prev, dishName: false}));
+                        }}
+                        disabled={orderStatus === 'sent' || (isBookingClosed && !user.isAdmin && !demoMode)}
+                        placeholder={(orderStatus === 'sent' || (isBookingClosed && !user.isAdmin && !demoMode)) ? "Ordine chiuso" : "Es: Insalatona pollo e noci..."}
+                        className={`w-full border-2 p-3 rounded-lg text-lg font-bold text-gray-800 outline-none transition-all placeholder:font-normal placeholder:text-gray-300 ${errors.dishName ? 'border-red-400 bg-red-50' : 'border-green-100 focus:border-green-500'} ${(orderStatus === 'sent' || (isBookingClosed && !user.isAdmin && !demoMode)) ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''}`}
+                    />
+                  </>
+                )}
             </div>
 
-            {/* SEZIONE 2 & 3 */}
-            <div className={`bg-white border-2 border-slate-200 p-5 rounded-xl shadow-lg sticky bottom-4 z-20 ${orderStatus === 'sent' || (isBookingClosed && !user.isAdmin && !demoMode) ? 'opacity-75 grayscale' : ''}`}>
-                <h3 className="font-bold text-gray-700 mb-3 text-sm uppercase tracking-wide border-b pb-1">2. Completa il tuo ordine</h3>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
-                  <div>
-                     <label className={`block text-xs font-bold uppercase mb-2 ${errors.water ? 'text-red-600' : 'text-gray-500'}`}>Scelta Acqua *</label>
-                     <div className="flex gap-2 h-20">
-                        {['Nessuna', 'Naturale', 'Frizzante'].map(opt => (
-                           <div key={opt} className={`flex-1 ${orderStatus === 'sent' || (isBookingClosed && !user.isAdmin && !demoMode) ? 'pointer-events-none' : ''}`} onClick={() => {
-                             if(orderStatus !== 'sent' && (!isBookingClosed || user.isAdmin || demoMode)) {
-                               setSelectedWater(opt);
-                               if(errors.water) setErrors(prev => ({...prev, water: false}));
-                             }
-                           }}>
-                              <WaterIcon type={opt} selected={selectedWater === opt} hasError={errors.water} />
-                           </div>
-                        ))}
-                     </div>
-                  </div>
-
-                  <div>
-                     <label className={`block text-xs font-bold uppercase mb-2 ${errors.dining ? 'text-red-600' : 'text-gray-500'}`}>Dove mangi? *</label>
-                     <div className="flex gap-2 h-20">
-                        {['bar', 'asporto'].map(choice => (
-                          <button 
-                            key={choice}
-                            disabled={orderStatus === 'sent' || (isBookingClosed && !user.isAdmin && !demoMode)}
-                            onClick={() => {
-                              setDiningChoice(choice);
-                              if(errors.dining) setErrors(prev => ({...prev, dining: false}));
-                            }}
-                            className={`flex-1 flex flex-col items-center justify-center rounded-lg border transition-all ${
-                              diningChoice === choice 
-                                ? (choice === 'bar' ? 'bg-orange-100 border-orange-500 ring-2 ring-orange-400 text-orange-800' : 'bg-red-100 border-red-500 ring-2 ring-red-400 text-red-800') + ' font-bold'
-                                : errors.dining ? 'bg-red-50 border-red-500 text-red-700' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
-                            }`}
-                          >
-                            <span className="text-2xl">{choice === 'bar' ? '☕' : '🥡'}</span>
-                            <span className="text-xs mt-1 font-bold uppercase">{choice === 'bar' ? 'Al Bar' : 'Asporto'}</span>
-                          </button>
-                        ))}
-                     </div>
-                  </div>
-                </div>
-
-                <div className="pt-2 border-t mt-2">
-                   {orderStatus === 'sent' && !user.isAdmin ? (
-                      <div className="bg-green-100 p-3 rounded-lg text-center border border-green-300">
-                        <span className="text-green-800 font-bold text-lg">🔒 Ordine Inviato</span>
-                        <p className="text-green-700 text-xs">Non è più possibile modificare le scelte.</p>
-                      </div>
-                   ) : isBookingClosed && !user.isAdmin && !demoMode ? (
-                      <div className="bg-red-100 p-3 rounded-lg text-center border border-red-300">
-                        <span className="text-red-800 font-bold text-lg">🛑 Ordini Chiusi</span>
-                        <p className="text-red-700 text-xs">Le prenotazioni chiudono alle 12:00.</p>
-                      </div>
-                   ) : orders.some(o => o.userId === actingAsUser.id) ? (
-                      <div className="flex items-center justify-between bg-green-50 p-2 rounded border border-green-200">
-                        <div>
-                            <span className="text-green-800 font-bold text-sm block">Ordine Salvato!</span>
-                            <span className="text-green-600 text-xs truncate max-w-[150px] inline-block">{dishName}</span>
-                            {user.isAdmin && actingAsUser.id !== user.id && <span className="text-[10px] text-orange-600 block">(per {actingAsUser.name})</span>}
+            {/* SEZIONE 2 & 3 - NASCOSTA SE CHIUSO */}
+            {!isClosedView && (
+                <div className={`bg-white border-2 border-slate-200 p-5 rounded-xl shadow-lg sticky bottom-4 z-20 ${orderStatus === 'sent' || (isBookingClosed && !user.isAdmin && !demoMode) ? 'opacity-75 grayscale' : ''}`}>
+                    <h3 className="font-bold text-gray-700 mb-3 text-sm uppercase tracking-wide border-b pb-1">2. Completa il tuo ordine</h3>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
+                    <div>
+                        <label className={`block text-xs font-bold uppercase mb-2 ${errors.water ? 'text-red-600' : 'text-gray-500'}`}>Scelta Acqua *</label>
+                        <div className="flex gap-2 h-20">
+                            {['Nessuna', 'Naturale', 'Frizzante'].map(opt => (
+                            <div key={opt} className={`flex-1 ${orderStatus === 'sent' || (isBookingClosed && !user.isAdmin && !demoMode) ? 'pointer-events-none' : ''}`} onClick={() => {
+                                if(orderStatus !== 'sent' && (!isBookingClosed || user.isAdmin || demoMode)) {
+                                setSelectedWater(opt);
+                                if(errors.water) setErrors(prev => ({...prev, water: false}));
+                                }
+                            }}>
+                                <WaterIcon type={opt} selected={selectedWater === opt} hasError={errors.water} />
+                            </div>
+                            ))}
                         </div>
-                        <button onClick={cancelOrder} className="text-xs text-red-600 underline hover:text-red-800 font-bold px-2 py-1 rounded hover:bg-red-50">Cancella</button>
-                      </div>
-                    ) : (
-                      <button 
-                        onClick={placeOrder} 
-                        className={`w-full text-white py-3 rounded-lg font-bold shadow-lg transform transition active:scale-95 flex items-center justify-center gap-2 uppercase tracking-wide ${user.isAdmin && actingAsUser.id !== user.id ? 'bg-orange-600 hover:bg-orange-700' : 'bg-green-700 hover:bg-green-800'}`}
-                      >
-                        <span>{user.isAdmin && actingAsUser.id !== user.id ? `📨 Ordina per ${actingAsUser.name.split(' ')[0]}` : '📨 Salva la tua scelta'}</span>
-                      </button>
-                    )}
-                    {message && orderStatus !== 'sent' && !(isBookingClosed && !user.isAdmin && !demoMode) && <p className={`text-center font-bold mt-2 text-sm animate-pulse ${message.includes('Errore') || message.includes('evidenziati') ? 'text-red-600' : 'text-green-600'}`}>{message}</p>}
+                    </div>
+
+                    <div>
+                        <label className={`block text-xs font-bold uppercase mb-2 ${errors.dining ? 'text-red-600' : 'text-gray-500'}`}>Dove mangi? *</label>
+                        <div className="flex gap-2 h-20">
+                            {['bar', 'asporto'].map(choice => (
+                            <button 
+                                key={choice}
+                                disabled={orderStatus === 'sent' || (isBookingClosed && !user.isAdmin && !demoMode)}
+                                onClick={() => {
+                                setDiningChoice(choice);
+                                if(errors.dining) setErrors(prev => ({...prev, dining: false}));
+                                }}
+                                className={`flex-1 flex flex-col items-center justify-center rounded-lg border transition-all ${
+                                diningChoice === choice 
+                                    ? (choice === 'bar' ? 'bg-orange-100 border-orange-500 ring-2 ring-orange-400 text-orange-800' : 'bg-red-100 border-red-500 ring-2 ring-red-400 text-red-800') + ' font-bold'
+                                    : errors.dining ? 'bg-red-50 border-red-500 text-red-700' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                                }`}
+                            >
+                                <span className="text-2xl">{choice === 'bar' ? '☕' : '🥡'}</span>
+                                <span className="text-xs mt-1 font-bold uppercase">{choice === 'bar' ? 'Al Bar' : 'Asporto'}</span>
+                            </button>
+                            ))}
+                        </div>
+                    </div>
+                    </div>
+
+                    <div className="pt-2 border-t mt-2">
+                    {orderStatus === 'sent' && !user.isAdmin ? (
+                        <div className="bg-green-100 p-3 rounded-lg text-center border border-green-300">
+                            <span className="text-green-800 font-bold text-lg">🔒 Ordine Inviato</span>
+                            <p className="text-green-700 text-xs">Non è più possibile modificare le scelte.</p>
+                        </div>
+                    ) : isBookingClosed && !user.isAdmin && !demoMode ? (
+                        <div className="bg-red-100 p-3 rounded-lg text-center border border-red-300">
+                            <span className="text-red-800 font-bold text-lg">🛑 Ordini Chiusi</span>
+                            <p className="text-red-700 text-xs">Le prenotazioni chiudono alle 12:00.</p>
+                        </div>
+                    ) : orders.some(o => o.userId === actingAsUser.id) ? (
+                        <div className="flex items-center justify-between bg-green-50 p-2 rounded border border-green-200">
+                            <div>
+                                <span className="text-green-800 font-bold text-sm block">Ordine Salvato!</span>
+                                <span className="text-green-600 text-xs truncate max-w-[150px] inline-block">{dishName}</span>
+                                {user.isAdmin && actingAsUser.id !== user.id && <span className="text-[10px] text-orange-600 block">(per {actingAsUser.name})</span>}
+                            </div>
+                            <button onClick={cancelOrder} className="text-xs text-red-600 underline hover:text-red-800 font-bold px-2 py-1 rounded hover:bg-red-50">Cancella</button>
+                        </div>
+                        ) : (
+                        <button 
+                            onClick={placeOrder} 
+                            className={`w-full text-white py-3 rounded-lg font-bold shadow-lg transform transition active:scale-95 flex items-center justify-center gap-2 uppercase tracking-wide ${user.isAdmin && actingAsUser.id !== user.id ? 'bg-orange-600 hover:bg-orange-700' : 'bg-green-700 hover:bg-green-800'}`}
+                        >
+                            <span>{user.isAdmin && actingAsUser.id !== user.id ? `📨 Ordina per ${actingAsUser.name.split(' ')[0]}` : '📨 Salva la tua scelta'}</span>
+                        </button>
+                        )}
+                        {message && orderStatus !== 'sent' && !(isBookingClosed && !user.isAdmin && !demoMode) && <p className={`text-center font-bold mt-2 text-sm animate-pulse ${message.includes('Errore') || message.includes('evidenziati') ? 'text-red-600' : 'text-green-600'}`}>{message}</p>}
+                    </div>
                 </div>
-              </div>
+            )}
             </div>
 
             {/* RIGHT: Riepilogo e Admin */}
