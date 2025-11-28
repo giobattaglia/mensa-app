@@ -26,7 +26,6 @@ const SETTINGS_DOC_PATH = `${PUBLIC_DATA_PATH}/settings`;
 const BANNER_IMAGE_URL = "https://images.unsplash.com/photo-1559339352-11d035aa65de?q=80&w=2074&auto=format&fit=crop"; 
 
 // --- 👥 LISTA COLLEGHI UFFICIALE (GESTITA DA CODICE) ---
-// ID devono essere stabili per contare i buoni correttamente
 const COLLEAGUES_LIST = [
   { id: 'u1', name: 'Barbara Zucchi', email: 'b.zucchi@comune.formigine.mo.it', pin: '1111', isAdmin: false },
   { id: 'u2', name: 'Chiara Italiani', email: 'c_italiani@comune.formigine.mo.it', pin: '2222', isAdmin: false },
@@ -326,7 +325,7 @@ const UserStatsModal = ({ db, user, onClose }) => {
         querySnapshot.forEach((doc) => {
             const data = doc.data();
             const myOrder = (data.orders || []).find(o => o.userId === user.id);
-            // NOTA: Contiamo anche gli ordini DEMO, come richiesto
+            // NOTA: Contiamo anche gli ordini DEMO come richiesto
             if (myOrder) {
                 ordersFound.push({
                     date: data.mealDate,
@@ -484,7 +483,6 @@ const AdminHistory = ({ db, onClose, user }) => {
                       <div className="flex gap-2 items-center">
                         <span className="font-bold text-gray-700">{o.userName}</span>
                         <span className="text-gray-600">{o.itemName}</span>
-                         {/* Mostra se è un ordine demo */}
                          {o.isDemo && <span className="text-[10px] bg-purple-100 text-purple-600 px-1 rounded">TEST</span>}
                       </div>
                       <span className={`text-xs px-2 py-1 rounded font-bold ${o.isTakeout ? "bg-red-100 text-red-600" : "bg-orange-100 text-orange-600"}`}>
@@ -1125,6 +1123,15 @@ const App = () => {
     window.location.href = mailtoLink;
   };
 
+  const openLateEmail = () => {
+    const subject = encodeURIComponent(`Ordine Tardivo/Personale - ${todayDate.toLocaleDateString('it-IT')}`);
+    // Messaggio precompilato semplice per ordine singolo
+    const body = encodeURIComponent(`Ciao, sono ${user.name}.\nVorrei ordinare per oggi:\n\n- [SCRIVI QUI IL PIATTO]\n\nGrazie!`);
+    // Solo destinatario Bar, niente CC
+    const mailtoLink = `mailto:${appSettings.emailBar}?subject=${subject}&body=${body}`;
+    window.location.href = mailtoLink;
+  };
+
   if (loading || !dataLoaded) return <div className="min-h-screen flex items-center justify-center"><LoadingSpinner text="Connessione al database..." onForceStart={forceStart} /></div>;
 
   // --- LOGICA ACCESSO: Login sempre permesso ---
@@ -1133,8 +1140,7 @@ const App = () => {
   const barOrders = orders.filter(o => !o.isTakeout);
   const takeoutOrders = orders.filter(o => o.isTakeout);
 
-  // --- LOGICA VISTA CHIUSA ---
-  // Se il negozio è chiuso e non siamo in demo mode, mostriamo la dashboard ma con il pannello "Oggi Riposo"
+  // SE CHIUSO E NON DEMO: DISABILITA INPUT MA MOSTRA UI
   const isClosedView = (!isShopOpen && !demoMode);
 
   return (
@@ -1191,7 +1197,7 @@ const App = () => {
 
         {/* MODALI */}
         {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
-        {showAdminPanel && <AdminPanel db={db} currentDay={todayStr} onClose={() => setShowAdminPanel(false)} colleaguesList={COLLEAGUES_LIST} />}
+        {showAdminPanel && <AdminPanel db={db} currentDay={todayStr} onClose={() => setShowAdminPanel(false)} colleaguesList={colleaguesList} />}
         {showHistory && <AdminHistory db={db} onClose={() => setShowHistory(false)} user={user} />}
         {showUserStats && <UserStatsModal db={db} user={user} onClose={() => setShowUserStats(false)} />}
 
@@ -1419,13 +1425,40 @@ const App = () => {
             {/* RIGHT: Riepilogo e Admin */}
             <div className="lg:col-span-4 space-y-6">
             
-            {/* Box Admin */}
+            {/* Box Admin / Invio */}
             <div className="bg-slate-100 p-4 rounded-lg border border-slate-300 shadow-sm">
               <h3 className="font-bold text-slate-700 mb-4 text-sm uppercase flex items-center gap-2">
                 <span>🚀</span> Zona Invio
               </h3>
               
-              {orderStatus === 'sent' ? (
+              {/* SE CHIUSO/SCADUTO MA NON INVIATO: MOSTRA BOTTONI EMERGENZA */}
+              {(isClosedView || isEmailClosed) && orderStatus !== 'sent' ? (
+                  <div className="space-y-3">
+                      <div className="bg-red-50 border border-red-200 p-3 rounded text-center">
+                          <p className="text-red-700 font-bold text-sm mb-1">⛔ TEMPO SCADUTO / CHIUSO</p>
+                          <p className="text-xs text-gray-600">Non è possibile inviare l'ordine di gruppo.</p>
+                      </div>
+                      
+                      <a href={`tel:${appSettings.phoneBar}`} className="block w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded text-center shadow-md transition-colors">
+                         📞 CHIAMA IL BAR
+                      </a>
+                      
+                      <button onClick={openLateEmail} className="block w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded text-center shadow-md transition-colors">
+                         ✉️ MAIL DIRETTA (Personale)
+                      </button>
+                      <p className="text-[10px] text-gray-500 text-center mt-1">Apre la tua mail solo verso il bar (no colleghi in copia).</p>
+
+                      {/* ADMIN OVERRIDE */}
+                      {user.isAdmin && (
+                        <div className="pt-4 mt-4 border-t border-gray-300">
+                            <p className="text-xs font-bold text-orange-600 mb-2 text-center">🛠️ Admin Override</p>
+                             <button onClick={markAsSent} className="w-full py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold rounded text-xs mb-2">
+                                Forza stato "INVIATO"
+                             </button>
+                        </div>
+                      )}
+                  </div>
+              ) : orderStatus === 'sent' ? (
                  <div className="text-center p-4 bg-white rounded border border-green-200">
                     <div className="text-4xl mb-2">✅</div>
                     <p className="text-green-800 font-bold">Email Inviata da {orderAuthor || 'un collega'}</p>
@@ -1439,38 +1472,29 @@ const App = () => {
               ) : (
                 <div className="space-y-4">
                   {/* FASE 1 */}
-                  {isEmailClosed && !user.isAdmin && !demoMode ? (
-                      <div className="bg-red-50 border border-red-200 p-4 rounded text-center">
-                          <p className="text-red-600 font-bold mb-2">⛔ Tempo Email Scaduto</p>
-                          <p className="text-xs text-gray-600">Non è più possibile inviare l'email (13:00+). Chiama il bar.</p>
+                  <div className="relative border-l-2 border-blue-400 pl-4 ml-2">
+                      <div className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-blue-500 border-2 border-white"></div>
+                      <h4 className="text-sm font-bold text-blue-800 mb-1">Fase 1: Invia l'Email</h4>
+                      <p className="text-xs text-slate-500 mb-2">Apri il tuo programma di posta. Il testo è già pronto.</p>
+                      <div className="grid gap-2">
+                          <button onClick={openGmail} className="w-full border py-2 rounded font-bold shadow-sm flex items-center justify-center gap-2 text-sm bg-white border-red-200 text-red-700 hover:bg-red-50">
+                              <span className="text-lg">🔴</span> Gmail Web (PC)
+                          </button>
+                          <button onClick={openDefaultMail} className="w-full border py-2 rounded font-bold shadow-sm flex items-center justify-center gap-2 text-sm bg-white border-slate-300 text-slate-700 hover:bg-slate-50">
+                              <span className="text-lg">📱</span> App Email (Mobile)
+                          </button>
                       </div>
-                  ) : (
-                    <div className="relative border-l-2 border-blue-400 pl-4 ml-2">
-                        <div className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-blue-500 border-2 border-white"></div>
-                        <h4 className="text-sm font-bold text-blue-800 mb-1">Fase 1: Invia l'Email</h4>
-                        <p className="text-xs text-slate-500 mb-2">Apri il tuo programma di posta. Il testo è già pronto.</p>
-                        <div className="grid gap-2">
-                            <button onClick={openGmail} className="w-full border py-2 rounded font-bold shadow-sm flex items-center justify-center gap-2 text-sm bg-white border-red-200 text-red-700 hover:bg-red-50">
-                                <span className="text-lg">🔴</span> Gmail Web (PC)
-                            </button>
-                            <button onClick={openDefaultMail} className="w-full border py-2 rounded font-bold shadow-sm flex items-center justify-center gap-2 text-sm bg-white border-slate-300 text-slate-700 hover:bg-slate-50">
-                                <span className="text-lg">📱</span> App Email (Mobile)
-                            </button>
-                        </div>
-                    </div>
-                  )}
+                  </div>
 
                   {/* FASE 2 */}
-                  {(!isEmailClosed || user.isAdmin || demoMode) && (
-                    <div className="relative border-l-2 border-green-400 pl-4 ml-2">
-                        <div className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-green-500 border-2 border-white"></div>
-                        <h4 className="text-sm font-bold text-green-800 mb-1">Fase 2: Conferma nel sistema</h4>
-                        <p className="text-xs text-slate-500 mb-2">Solo DOPO aver inviato l'email reale, clicca qui per chiudere l'ordine.</p>
-                        <button onClick={markAsSent} className="w-full py-3 rounded font-bold shadow flex items-center justify-center gap-2 text-sm bg-green-600 hover:bg-green-700 text-white animate-pulse">
-                            <span>✅</span> CONFERMA INVIO
-                        </button>
-                    </div>
-                  )}
+                  <div className="relative border-l-2 border-green-400 pl-4 ml-2">
+                      <div className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-green-500 border-2 border-white"></div>
+                      <h4 className="text-sm font-bold text-green-800 mb-1">Fase 2: Conferma nel sistema</h4>
+                      <p className="text-xs text-slate-500 mb-2">Solo DOPO aver inviato l'email reale, clicca qui per chiudere l'ordine.</p>
+                      <button onClick={markAsSent} className="w-full py-3 rounded font-bold shadow flex items-center justify-center gap-2 text-sm bg-green-600 hover:bg-green-700 text-white animate-pulse">
+                          <span>✅</span> CONFERMA INVIO
+                      </button>
+                  </div>
                 </div>
               )}
             </div>
