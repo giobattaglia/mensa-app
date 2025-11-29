@@ -23,6 +23,7 @@ const PUBLIC_ORDERS_COLLECTION = `${PUBLIC_DATA_PATH}/mealOrders`;
 const CONFIG_DOC_PATH = `${PUBLIC_DATA_PATH}/config`;
 const SETTINGS_DOC_PATH = `${PUBLIC_DATA_PATH}/settings`;
 const HOLIDAYS_DOC_PATH = `${CONFIG_DOC_PATH}/holidays`; // Percorso corretto
+const SENT_DAYS_DOC_PATH = `${CONFIG_DOC_PATH}/sentDays`; // Nuovo percorso per tenere traccia dei giorni inviati
 
 
 const BANNER_IMAGE_URL = "https://images.unsplash.com/photo-1559339352-11d035aa65de?q=80&w=2074&auto=format&fit=crop";
@@ -283,7 +284,7 @@ const AdminHistory = ({ db, onClose, user }) => {
         try {
             const docRef = doc(db, PUBLIC_ORDERS_COLLECTION, dateStr);
             const docSnap = await getDoc(docRef);
-            if (docSnap.exists()) {
+            if (docSnap.exists() && docSnap.data().status === 'sent') { // Filtra solo se lo stato è 'sent'
                 // Ordine alfabetico per nome
                 const rawOrders = docSnap.data().orders || [];
                 const sorted = rawOrders.sort((a, b) => a.userName.localeCompare(b.userName));
@@ -292,7 +293,7 @@ const AdminHistory = ({ db, onClose, user }) => {
                 setHistoryAuthor(docSnap.data().confirmedBy || '');
             } else {
                 setHistoryOrders([]);
-                setHistoryStatus('Nessun ordine trovato');
+                setHistoryStatus('Nessun ordine trovato o non inviato');
                 setHistoryAuthor('');
             }
         } catch (e) { console.error(e); }
@@ -328,9 +329,9 @@ const AdminHistory = ({ db, onClose, user }) => {
                     <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="border p-1 rounded" />
                 </div>
 
-                <div className="flex-1 overflow-y-auto border rounded-lg p-4 bg-gray-50">
+                <div className-="flex-1 overflow-y-auto border rounded-lg p-4 bg-gray-50">
                     {loadingHistory ? <p>Caricamento...</p> : (
-                        historyOrders.length === 0 ? <p className="text-gray-500 italic">Nessun ordine in questa data.</p> : (
+                        historyOrders.length === 0 ? <p className="text-gray-500 italic text-center">Nessun ordine ufficiale inviato in questa data.</p> : (
                             <div className="space-y-2">
                                 {historyStatus === 'sent' && (
                                     <div className="bg-green-100 border border-green-300 text-green-800 p-2 rounded text-sm font-bold mb-3 text-center">
@@ -613,7 +614,7 @@ const App = () => {
 
     const cancelOrder = async () => { if (orderStatus === 'sent' && !user.isAdmin) { alert("Ordine già inviato al bar! Non puoi cancellare."); return; } try { const orderRef = doc(db, PUBLIC_ORDERS_COLLECTION, todayStr); await updateDoc(orderRef, { orders: orders.filter(o => o.userId !== actingAsUser.id) }); setDishName(''); setSelectedWater(''); setDiningChoice(''); setMessage("Ordine annullato 🗑️"); } catch (e) { console.error(e); } };
     const markAsSent = async () => { if (!confirm("Sei sicuro di aver inviato l'email? Questo bloccherà gli ordini per tutti.")) return; try { const orderRef = doc(db, PUBLIC_ORDERS_COLLECTION, todayStr); await setDoc(orderRef, { status: 'sent', confirmedBy: user.name }, { merge: true }); } catch (e) { console.error("Errore update status", e); } };
-    const unlockOrder = async () => { if (!confirm("Vuoi davvero riaprire l'ordine? Gli utenti potranno modificare le loro scelte.")) return; try { const orderRef = doc(db, PUBLIC_ORDERS_COLLECTION, todayStr); await setDoc(doc(db, CONFIG_DOC_PATH, 'override'), { isOverride: false }, { merge: true }); await setDoc(orderRef, { status: 'open', confirmedBy: '' }, { merge: true }); } catch (e) { console.error("Errore sblocco", e); } };
+    const unlockOrder = async () => { if (!confirm("Vuoi davvero riaprire l'ordine? Gli utenti potranno modificare le loro scelte.")) return; try { const orderRef = doc(db, PUBLIC_ORDERS_COLLECTION, todayStr); await setDoc(doc(db, CONFIG_DOC_PATH, 'override'), { isOverride: false }, { merge: true }); await setDoc(doc(db, PUBLIC_ORDERS_COLLECTION, todayStr), { status: 'open', confirmedBy: '' }, { merge: true }); } catch (e) { console.error("Errore sblocco", e); } };
     const getAllEmails = () => { return COLLEAGUES_LIST.map(c => c.email).filter(email => email && email.includes('@')).join(','); };
 
     const generateEmailText = () => {
