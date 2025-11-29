@@ -1180,14 +1180,16 @@ const App = () => {
             backgroundImage: BANNER_IMAGE_URL ? `url(${BANNER_IMAGE_URL})` : 'none' 
           }}
         >
-           <div className={`absolute inset-0 ${BANNER_IMAGE_URL ? 'bg-black/60' : 'bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-yellow-200/10 to-green-900'} flex flex-col justify-center items-center text-center p-6 pt-10`}>
+           <div className={`absolute inset-0 ${BANNER_IMAGE_URL ? 'bg-black/60' : 'bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-yellow-200/10 to-green-900'} flex flex-col justify-center items-start text-left p-6 pt-10`}>
              <h1 className="text-4xl font-extrabold tracking-tight uppercase drop-shadow-lg" style={{fontFamily: 'serif'}}>7 MILA CAFFÈ</h1>
-             <div className="flex items-center justify-center md:justify-start gap-2 mt-1">
+             <div className="flex items-center gap-2 mt-1">
                <span className="bg-white/90 text-green-800 px-2 py-0.5 rounded text-xs font-bold tracking-widest shadow-sm">TEL. {appSettings.phoneBar}</span>
              </div>
-             {/* FRASE CENTRATA */}
-             <div className="max-w-md italic font-serif text-green-50 text-lg border-t-2 border-green-400 pt-3 mt-4 drop-shadow-md">
-               "Anche nel caos del lavoro,<br/>il pranzo resta un momento sacro."
+             {/* FRASE CENTRATA SOTTO LA LINEA VERDE PER STACCARE */}
+             <div className="w-full text-center">
+                 <div className="max-w-md italic font-serif text-green-50 text-lg border-t-2 border-green-400 pt-3 mt-4 drop-shadow-md mx-auto">
+                   "Anche nel caos del lavoro,<br/>il pranzo resta un momento sacro."
+                 </div>
              </div>
            </div>
         </header>
