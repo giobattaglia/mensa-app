@@ -146,7 +146,9 @@ const HelpModal = ({ onClose }) => (
           <h3 className="font-bold text-red-800 border-b border-red-300 pb-1 mb-2">2. Scadenze</h3>
           <ul className="list-disc pl-5 space-y-2 text-sm text-red-700">
             <li>**10:30:** Appare l'avviso "È Tardi".</li>
+            {/* CORREZIONE TESTO: RIPRISTINATO 11:59 */}
             <li>**11:59:** STOP ORDINI (non puoi più scegliere).</li>
+            {/* CORREZIONE TESTO: RIPRISTINATO 12:00 */}
             <li>**12:00:** STOP EMAIL (Bisogna telefonare).</li>
           </ul>
         </div>
@@ -915,6 +917,7 @@ const App = () => {
 
   const placeOrder = async () => {
     if (orderStatus === 'sent' && !user.isAdmin) { window.alert("Ordine già inviato al bar! Non puoi modificare."); return; }
+    // CORRETTO: Ora controlla isBookingClosed (che è 11:59)
     if (isBookingClosed && !user.isAdmin && !adminOverride) { window.alert("Troppo tardi! Le prenotazioni si chiudono alle 11:59. Solo l'admin può modificare."); return; }
 
     const newErrors = {};
