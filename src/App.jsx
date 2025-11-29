@@ -1,21 +1,49 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, updateProfile, signOut } from 'firebase/auth';
-import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, query, where, arrayUnion, updateDoc, writeBatch, deleteDoc } from 'firebase/firestore';
+import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
+import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, updateDoc, deleteDoc } from 'firebase/firestore';
 
-// --- CONFIGURAZIONE FIREBASE GLOBALE (TUA) ---
-const firebaseConfig = {
-  apiKey: "AIzaSyALMoiyVGzHEesU6L5ax2T7Iovg_Zs6kwA",
-  authDomain: "mensa-ufficio-2025.firebaseapp.com",
-  projectId: "mensa-ufficio-2025",
-  storageBucket: "mensa-ufficio-2025.firebasestorage.app",
-  messagingSenderId: "792389436556",
-  appId: "1:792389436556:web:47cf9c9636ff2d801ee7a9"
-};
+// --- VARIABILI GLOBALI E INIZIALIZZAZIONE FIREBASE (Adatto per Vercel/Canvas) ---
 
-// --- AGGIUNGI QUESTE DUE RIGHE SOTTO LA CONFIGURAZIONE ---
-const appId = 'mensa-app-v1'; 
-const initialAuthToken = null;
+// Determina se stiamo eseguendo il codice all'interno dell'ambiente Canvas
+const isCanvasEnvironment = typeof __firebase_config !== 'undefined' && __firebase_config !== null;
+
+// Configurazione Firebase: legge le variabili globali di Canvas o le Variabili d'Ambiente di Vercel
+const firebaseConfig = isCanvasEnvironment ? 
+    JSON.parse(__firebase_config) : 
+    {
+        apiKey: process.env.REACT_APP_API_KEY,
+        authDomain: process.env.REACT_APP_AUTH_DOMAIN,
+        projectId: process.env.REACT_APP_PROJECT_ID,
+        storageBucket: process.env.REACT_APP_STORAGE_BUCKET,
+        messagingSenderId: process.env.REACT_APP_MESSAGING_SENDER_ID,
+        appId: process.env.REACT_APP_APP_ID, // Questo è il campo chiave
+    };
+
+// L'App ID per i percorsi Firestore (usa l'ID Canvas o, in Vercel, il Project ID)
+const appId = isCanvasEnvironment ? 
+    (typeof __app_id !== 'undefined' ? __app_id : 'default-app-id') : 
+    (firebaseConfig.projectId || 'default-vercel-id'); 
+
+const initialAuthToken = isCanvasEnvironment ? 
+    (typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null) : 
+    null; 
+
+let db;
+let auth;
+
+if (firebaseConfig && firebaseConfig.projectId) {
+  try {
+    const app = initializeApp(firebaseConfig);
+    db = getFirestore(app);
+    auth = getAuth(app);
+    // console.log("Firebase initialized successfully.");
+  } catch (error) {
+    console.error("Error initializing Firebase:", error);
+  }
+} else {
+  console.warn("Firebase config not available. App will run in mock mode.");
+}
 
 // --- PERCORSI FIREBASE (Correzione Struttura: Uso Reference) ---
 // La base è una Collection (artifacts/{appId}/public/data/collectionName)
