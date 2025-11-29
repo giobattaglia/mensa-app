@@ -115,7 +115,7 @@ const HelpModal = ({ onClose }) => (
                 <div className="bg-red-50 p-4 rounded-lg border border-red-200">
                     <h3 className="font-bold text-red-800 border-b border-red-300 pb-1 mb-2">2. Scadenze</h3>
                     <ul className="list-disc pl-5 space-y-2 text-sm text-red-700">
-                        <li>**10:30:** Chiusura ordini e Allarme Invio.</li>
+                        <li>**10:30:** Scadenza per salvare l'ordine e per inviare la mail di gruppo.</li>
                         <li>**12:00:** STOP ORDINI. Il sistema si blocca.</li>
                         <li>**13:00:** STOP EMAIL. L'unico tasto disponibile è "CHIAMA IL BAR".</li>
                     </ul>
