@@ -17,797 +17,1475 @@ const firebaseConfig = {
 const appId = 'mensa-app-v1'; 
 const initialAuthToken = null;
 
-// Percorsi Firestore
-const PUBLIC_DATA_PATH = `artifacts/${appId}/public/data`;
-const PUBLIC_ORDERS_COLLECTION = `${PUBLIC_DATA_PATH}/mealOrders`;
-const CONFIG_DOC_PATH = `${PUBLIC_DATA_PATH}/config`;
-const SETTINGS_DOC_PATH = `${PUBLIC_DATA_PATH}/settings`;
-const HOLIDAYS_DOC_PATH = `${CONFIG_DOC_PATH}/holidays`; // Percorso corretto
+// --- PERCORSI FIREBASE (Correzione Struttura: Uso Reference) ---
+// La base è una Collection (artifacts/{appId}/public/data/collectionName)
+const BASE_CONFIG_COLLECTION = db ? collection(db, `/artifacts/${appId}/public/data/config`) : null;
+const BASE_ORDERS_COLLECTION = db ? collection(db, `/artifacts/${appId}/public/data/mealOrders`) : null;
 
+// Riferimenti a Documenti specifici
+const SETTINGS_DOC_REF = BASE_CONFIG_COLLECTION ? doc(BASE_CONFIG_COLLECTION, 'main') : null;
+const HOLIDAYS_DOC_REF = BASE_CONFIG_COLLECTION ? doc(BASE_CONFIG_COLLECTION, 'holidays') : null;
+const DAILY_MENU_DOC_REF = BASE_CONFIG_COLLECTION ? doc(BASE_CONFIG_COLLECTION, 'dailyMenu') : null;
 
-const BANNER_IMAGE_URL = "https://images.unsplash.com/photo-1559339352-11d035aa65de?q=80&w=2074&auto=format&fit=crop";
-const LOGIN_BG_URL = "https://images.unsplash.com/photo-1504674900247-0877df9cc836?q=80&w=2070&auto=format&fit=crop"; // Sfondo cibo verde/fresco
+const BANNER_IMAGE_URL = "https://images.unsplash.com/photo-1559339352-11d035aa65de?q=80&w=2074&auto=format&fit=crop"; 
 
 // --- 👥 LISTA COLLEGHI UFFICIALE (GESTITA DA CODICE) ---
 const COLLEAGUES_LIST = [
-    { id: 'u1', name: 'Barbara Zucchi', email: 'b.zucchi@comune.formigine.mo.it', pin: '1111', isAdmin: false },
-    { id: 'u2', name: 'Chiara Italiani', email: 'c_italiani@comune.formigine.mo.it', pin: '2222', isAdmin: false },
-    { id: 'u3', name: 'Davide Cremaschi', email: 'd.cremaschi@comune.formigine.mo.it', pin: '3333', isAdmin: false },
-    { id: 'u4', name: 'Federica Fontana', email: 'f.fontana@comune.formigine.mo.it', pin: '4444', isAdmin: false },
-    { id: 'u5', name: 'Gioacchino Battaglia', email: 'gioacchino.battaglia@comune.formigine.mo.it', pin: '7378', isAdmin: true }, // ADMIN
-    { id: 'u6', name: 'Giuseppe Carteri', email: 'g.carteri@comune.formigine.mo.it', pin: '6666', isAdmin: false },
-    { id: 'u7', name: 'Andrea Vescogni', email: 'andrea.vescogni@comune.formigine.mo.it', pin: '7777', isAdmin: false },
-    { id: 'u8', name: 'Patrizia Caselli', email: 'patrizia.caselli@comune.formigine.mo.it', pin: '8888', isAdmin: false },
-    { id: 'u9', name: 'Roberta Falchi', email: 'rfalchi@comune.formigine.mo.it', pin: '9999', isAdmin: false },
-    { id: 'u10', name: 'Roberta Palumbo', email: 'r.palumbo@comune.formigine.mo.it', pin: '1234', isAdmin: false },
-    { id: 'u11', name: 'Veronica Cantile', email: 'v.cantile@comune.formigine.mo.it', pin: '0000', isAdmin: false },
+  { id: 'u1', name: 'Barbara Zucchi', email: 'b.zucchi@comune.formigine.mo.it', pin: '1111', isAdmin: false },
+  { id: 'u2', name: 'Chiara Italiani', email: 'c_italiani@comune.formigine.mo.it', pin: '2222', isAdmin: false },
+  { id: 'u3', name: 'Davide Cremaschi', email: 'd.cremaschi@comune.formigine.mo.it', pin: '3333', isAdmin: false },
+  { id: 'u4', name: 'Federica Fontana', email: 'f.fontana@comune.formigine.mo.it', pin: '4444', isAdmin: false },
+  { id: 'u5', name: 'Gioacchino Battaglia', email: 'gioacchino.battaglia@comune.formigine.mo.it', pin: '7378', isAdmin: true }, // ADMIN
+  { id: 'u6', name: 'Giuseppe Carteri', email: 'g.carteri@comune.formigine.mo.it', pin: '6666', isAdmin: false },
+  { id: 'u7', name: 'Andrea Vescogni', email: 'andrea.vescogni@comune.formigine.mo.it', pin: '7777', isAdmin: false },
+  { id: 'u8', name: 'Patrizia Caselli', email: 'patrizia.caselli@comune.formigine.mo.it', pin: '8888', isAdmin: false },
+  { id: 'u9', name: 'Roberta Falchi', email: 'rfalchi@comune.formigine.mo.it', pin: '9999', isAdmin: false },
+  { id: 'u10', name: 'Roberta Palumbo', email: 'r.palumbo@comune.formigine.mo.it', pin: '1234', isAdmin: false },
+  { id: 'u11', name: 'Veronica Cantile', email: 'v.cantile@comune.formigine.mo.it', pin: '0000', isAdmin: false },
 ];
 
 const INITIAL_SETTINGS = {
-    emailBar: "gioacchino.battaglia@comune.formigine.mo.it",
-    phoneBar: "0598751381"
+  emailBar: "gioacchino.battaglia@comune.formigine.mo.it",
+  phoneBar: "0598751381"
 };
 
 // --- UTILITÀ CALENDARIO ---
 const formatDate = (date) => date.toISOString().split('T')[0];
 
 const generateAllowedDates = () => {
-    const dates = [];
-    const start = new Date('2025-01-01');
-    const end = new Date('2026-12-31');
-    let current = new Date(start);
+  const dates = [];
+  const start = new Date('2025-01-01');
+  const end = new Date('2026-12-31');
+  let current = new Date(start);
 
-    while (current <= end) {
-        const day = current.getDay();
-        // Lunedì (1) e Giovedì (4)
-        if (day === 1 || day === 4) {
-            dates.push(formatDate(current));
-        }
-        current.setDate(current.getDate() + 1);
+  while (current <= end) {
+    const day = current.getDay();
+    // Lunedì (1) e Giovedì (4)
+    if (day === 1 || day === 4) {
+      dates.push(formatDate(current));
     }
-    return dates;
+    current.setDate(current.getDate() + 1);
+  }
+  return dates;
 };
 
-const getNextOpenDay = (todayStr, activeDates) => {
-    const sortedDates = [...activeDates].sort();
-    return sortedDates.find(d => d > todayStr) || sortedDates[0] || null;
+const ALLOWED_DATES_LIST = generateAllowedDates();
+
+const getNextOpenDay = (fromDateStr) => {
+  const todayStr = fromDateStr || formatDate(new Date());
+  return ALLOWED_DATES_LIST.find(d => d > todayStr) || 'Data futura non trovata';
 };
 
 const LoadingSpinner = ({ text, onForceStart }) => (
-    <div className="flex flex-col items-center justify-center p-4 min-h-[300px]">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-4 border-green-700 mb-4"></div>
-        <span className="text-gray-500 font-medium">{text || 'Caricamento...'}</span>
-        {onForceStart && <button onClick={onForceStart} className="text-xs text-blue-500 underline mt-4">Forza Avvio</button>}
-    </div>
+  <div className="flex flex-col items-center justify-center p-4 min-h-[300px]">
+    <svg className="animate-spin -ml-1 mr-3 h-10 w-10 text-green-600 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+    </svg>
+    <span className="text-gray-500 font-medium text-lg mb-4">{text || 'Caricamento sistema...'}</span>
+    {onForceStart && (
+      <button 
+        onClick={onForceStart}
+        className="text-xs text-blue-500 underline hover:text-blue-700 cursor-pointer"
+      >
+        Ci mette troppo? Clicca qui per avviare comunque.
+      </button>
+    )}
+  </div>
 );
 
 // --- COMPONENTI UI ---
 
-const ClosedScreen = ({ nextDate }) => {
-    let formattedNext = "Presto";
-    if (nextDate) {
-        try {
-            const nextDateObj = new Date(nextDate);
-            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-            formattedNext = nextDateObj.toLocaleDateString('it-IT', options);
-        } catch (e) {
-            formattedNext = nextDate;
-        }
-    }
-
-    return (
-        <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-lg text-center border-t-8 border-gray-400">
-            <div className="mb-6 text-gray-300">
-                <svg className="w-20 h-20 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-            </div>
-            <h1 className="text-3xl font-extrabold text-gray-800 mb-2">😴 Oggi Riposo</h1>
-            <p className="text-gray-600 mb-6">
-                Le prenotazioni sono chiuse per oggi. Puoi comunque consultare il tuo Storico.
-            </p>
-
-            <div className="bg-green-50 p-4 rounded-lg border border-green-200 inline-block w-full mb-6">
-                <p className="text-sm text-green-800 font-bold uppercase tracking-wider mb-1">Prossima Apertura</p>
-                <p className="text-2xl text-green-900 font-serif capitalize">{formattedNext}</p>
-            </div>
-        </div>
-    );
-};
-
 const HelpModal = ({ onClose }) => (
-    <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm" onClick={onClose}>
-        <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 relative" onClick={e => e.stopPropagation()}>
-            <button onClick={onClose} className="absolute top-4 right-4 text-2xl text-gray-400 hover:text-gray-600">&times;</button>
-            <h2 className="text-xl font-bold text-green-800 mb-4">ℹ️ Guida Rapida</h2>
-            <div className="space-y-4 text-sm text-gray-600">
-                <p>• <strong>Giorni:</strong> Il sistema apre di default **solo i giorni Lunedì e Giovedì**. L'Admin può aprire altri giorni tramite Calendario.</p>
-                <p>• <strong>Scadenze:</strong></p>
-                <ul className="list-disc pl-5 space-y-2 text-sm text-red-700">
-                    <li>**10:30:** Scadenza per salvare l'ordine e per inviare la mail di gruppo.</li>
-                    <li>**12:00:** STOP ORDINI. Il modulo si blocca per tutti.</li>
-                    <li>**13:00:** STOP EMAIL. L'unico tasto disponibile è "CHIAMA IL BAR".</li>
-                </ul>
-            </div>
-            <button onClick={onClose} className="w-full mt-6 bg-green-600 text-white py-3 rounded-lg font-bold shadow-md hover:bg-green-700">Ho Capito</button>
+  <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm" onClick={onClose}>
+    <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 relative" onClick={e => e.stopPropagation()}>
+      <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-2xl font-bold">&times;</button>
+      
+      <h2 className="text-2xl font-bold text-green-800 mb-4 flex items-center gap-2">
+        ℹ️ Guida all'uso
+      </h2>
+
+      <div className="space-y-6">
+        <div>
+          <h3 className="font-bold text-gray-800 border-b pb-1 mb-2">1. Come Ordinare</h3>
+          <ul className="list-disc pl-5 space-y-2 text-sm text-gray-600">
+            <li>Il sistema apre solo il **Lunedì** e **Giovedì**.</li>
+            <li>Se entri in altri giorni, potrai solo consultare lo storico.</li>
+          </ul>
         </div>
+
+        <div className="bg-red-50 p-4 rounded-lg border border-red-200">
+          <h3 className="font-bold text-red-800 border-b border-red-300 pb-1 mb-2">2. Scadenze</h3>
+          <ul className="list-disc pl-5 space-y-2 text-sm text-red-700">
+            <li>**10:30:** Appare l'avviso "È Tardi".</li>
+            <li>**12:00:** STOP ORDINI (non puoi più scegliere).</li>
+            <li>**13:00:** STOP EMAIL (Bisogna telefonare).</li>
+          </ul>
+        </div>
+      </div>
+
+      <button onClick={onClose} className="w-full mt-6 bg-green-600 text-white py-2 rounded-lg font-bold hover:bg-green-700">
+        Ho capito
+      </button>
     </div>
+  </div>
 );
 
-const WaterIcon = ({ type, selected, onClick }) => {
-    let style = 'bg-white border-gray-200 text-gray-400 hover:bg-gray-50';
-    if (selected) {
-        if (type === 'Frizzante') style = 'bg-blue-50 border-blue-500 text-blue-600 ring-2 ring-blue-200';
-        else if (type === 'Naturale') style = 'bg-cyan-50 border-cyan-500 text-cyan-600 ring-2 ring-cyan-200';
-        else style = 'bg-gray-100 border-gray-500 text-gray-700';
-    }
-    return (
-        <div onClick={onClick} className={`flex flex-col items-center justify-center p-2 rounded-lg border cursor-pointer h-full transition-all ${style}`}>
-            <span className="text-2xl mb-1">{type === 'Naturale' ? '💧' : type === 'Frizzante' ? '🫧' : '🚫'}</span>
-            <span className="text-[10px] font-bold uppercase tracking-wide">{type}</span>
-        </div>
-    );
+const WaterIcon = ({ type, selected, hasError }) => {
+  let containerStyle = 'bg-white border-gray-200 hover:bg-gray-50';
+  if (selected) {
+    if (type === 'Frizzante') containerStyle = 'bg-blue-100 border-blue-600 ring-2 ring-blue-500';
+    else if (type === 'Naturale') containerStyle = 'bg-cyan-50 border-cyan-400 ring-2 ring-cyan-400';
+    else containerStyle = 'bg-gray-200 border-gray-400';
+  } else if (hasError) {
+    containerStyle = 'bg-red-50 border-red-500 ring-2 ring-red-200';
+  }
+
+  return (
+    <div className={`flex flex-col items-center justify-center p-2 rounded-lg border cursor-pointer transition-all w-full h-full ${containerStyle}`}>
+      {type === 'Naturale' && (
+        <>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={`w-8 h-8 ${selected ? 'text-cyan-500' : hasError ? 'text-red-400' : 'text-cyan-300'}`}>
+            <path fillRule="evenodd" d="M10.5 3.75a6.75 6.75 0 100 13.5 6.75 6.75 0 000-13.5ZM2.25 10.5a8.25 8.25 0 1114.59 5.28l1.228 1.228a.75.75 0 11-1.06 1.06l-1.228-1.228A8.25 8.25 0 012.25 10.5Zm3.655-4.2a.75.75 0 010 1.06 5.25 5.25 0 007.14 0 .75.75 0 011.06 0 6.75 6.75 0 01-9.54 0 .75.75 0 011.34-.82Z" clipRule="evenodd" />
+            <path d="M7 0h10v2H7z" className="text-cyan-700"/>
+            <path d="M9 2h6v3H9z" className="text-cyan-200"/>
+          </svg>
+          <span className={`text-xs font-bold mt-1 ${selected ? 'text-cyan-800' : hasError ? 'text-red-600' : 'text-gray-500'}`}>NATURALE</span>
+        </>
+      )}
+      {type === 'Frizzante' && (
+        <>
+          <div className="relative">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={`w-8 h-8 ${selected ? 'text-blue-700' : hasError ? 'text-red-400' : 'text-blue-400'}`}>
+              <path d="M7 0h10v2H7z" className="text-blue-900"/>
+              <path d="M9 2h6v3H9z" className="text-blue-300"/>
+            </svg>
+            <div className="absolute top-1/2 left-1 w-1 h-1 bg-white rounded-full animate-bounce"></div>
+            <div className="absolute bottom-2 left-3 w-1.5 h-1.5 bg-white rounded-full"></div>
+          </div>
+          <span className={`text-xs font-bold mt-1 ${selected ? 'text-blue-800' : hasError ? 'text-red-600' : 'text-gray-500'}`}>FRIZZANTE</span>
+        </>
+      )}
+      {type === 'Nessuna' && (
+        <>
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className={`w-8 h-8 ${selected ? 'text-gray-600' : hasError ? 'text-red-400' : 'text-gray-300'}`}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+          </svg>
+          <span className={`text-xs font-bold mt-1 ${selected ? 'text-gray-800' : hasError ? 'text-red-600' : 'text-gray-400'}`}>NESSUNA</span>
+        </>
+      )}
+    </div>
+  );
 };
 
-const TypeBtn = ({ type, active, onClick }) => (
-    <button onClick={onClick} className={`flex-1 flex flex-col items-center justify-center p-2 rounded-lg border transition-all ${active ? (type==='bar'?'bg-orange-100 border-orange-500 text-orange-700 ring-2 ring-orange-200':'bg-red-50 border-red-500 text-red-700 ring-2 ring-red-200') : 'bg-white border-gray-200 text-gray-400 hover:bg-gray-50'}`}>
-        <span className="text-2xl mb-1">{type === 'bar' ? '☕' : '🥡'}</span>
-        <span className="text-[10px] font-bold uppercase tracking-wide">{type}</span>
-    </button>
-);
+// --- SCHERMATA LOGIN ---
+const LoginScreen = ({ onLogin, colleagues = [] }) => {
+  const [selectedColleague, setSelectedColleague] = useState('');
+  const [pin, setPin] = useState('');
+  const [error, setError] = useState('');
 
-const LoginScreen = ({ onLogin }) => {
-    const [selId, setSelId] = useState('');
-    const [pin, setPin] = useState('');
-    const [error, setError] = useState('');
+  const safeColleagues = Array.isArray(colleagues) ? colleagues : [];
 
-    const handleLogin = () => {
-        if (!selId) { setError('Seleziona il tuo nome'); return; }
-        const user = COLLEAGUES_LIST.find(c => c.id === selId);
-        if (user && user.pin === pin) onLogin(user);
-        else setError('PIN Errato');
+  const handleLogin = () => {
+    if (!selectedColleague) {
+      setError('Seleziona il tuo nome dalla lista.');
+      return;
+    }
+    const user = safeColleagues.find(c => c.id === selectedColleague);
+    if (user && user.pin === pin) {
+      onLogin(user);
+    } else {
+      setError('PIN errato. Riprova.');
+      setPin('');
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
+      <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border-t-8 border-green-700 relative">
+        <div 
+          className="text-center mb-8 relative h-32 rounded-lg overflow-hidden bg-cover bg-center flex items-center justify-center"
+          style={{ 
+            backgroundImage: `url(${BANNER_IMAGE_URL})`,
+            backgroundColor: '#15803d'
+          }}
+        >
+          <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center text-white p-4">
+            <h1 className="text-3xl font-extrabold tracking-tight uppercase drop-shadow-lg font-serif">7 MILA CAFFÈ</h1>
+            <p className="text-green-200 text-xs italic mt-1 font-serif">
+              "Anche nel caos del lavoro, il pranzo resta un momento sacro."
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5 text-green-600"><path strokeLinecap="round" strokeLinejoin="round" d="M17.982 18.725A7.488 7.488 0 0 0 12 15.75a7.488 7.488 0 0 0-5.982 2.975m11.963 0a9 9 0 1 0-11.963 0m11.963 0A8.966 8.966 0 0 1 12 21a8.966 8.966 0 0 1-5.982-2.275M15 9.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" /></svg>
+              Chi sei?
+            </label>
+            <select 
+              value={selectedColleague}
+              onChange={(e) => { setSelectedColleague(e.target.value); setError(''); }}
+              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none bg-white"
+            >
+              <option value="">-- Seleziona il tuo nome --</option>
+              {safeColleagues.map(c => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5 text-green-600"><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-6 2.25h18a2.25 2.25 0 0 0 2.25-2.25v-1.375c0-1.172-.948-2.125-2.125-2.125H3.375A2.25 2.25 0 0 0 1.125 10.5v1.375c0 1.172.948 2.125 2.125 2.125Z" /></svg>
+              PIN Segreto
+            </label>
+            <input 
+              type="password"
+              maxLength="4"
+              value={pin}
+              onChange={(e) => { setPin(e.target.value); setError(''); }}
+              onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
+              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 outline-none text-center tracking-[0.5em] text-2xl font-bold"
+              placeholder="••••"
+            />
+          </div>
+
+          {error && (
+            <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm font-bold text-center animate-pulse">
+              {error}
+            </div>
+          )}
+
+          <button 
+            onClick={handleLogin}
+            className="w-full bg-green-700 hover:bg-green-800 text-white font-bold py-3 rounded-lg shadow-lg transform transition active:scale-95 disabled:opacity-50"
+            disabled={!selectedColleague || pin.length !== 4}
+          >
+            ACCEDI
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// --- COMPONENTE GESTIONE MENU (PER TUTTI) ---
+const PublicMenuManager = ({ db, onClose, currentMenu }) => {
+    const [bulkText, setBulkText] = useState("");
+    const [loading, setLoading] = useState(false);
+
+    const handleImport = async () => {
+        if (!bulkText.trim()) return;
+        setLoading(true);
+
+        const lines = bulkText.split('\n')
+          .map(line => line.trim())
+          // Rimuovi caratteri elenco puntato all'inizio (es: "- ", "* ", "1. ")
+          .map(line => line.replace(/^[-*•\d\.]+\s*/, ''))
+          .filter(line => line.length > 0);
+        
+        if (lines.length === 0) {
+            setLoading(false);
+            return;
+        }
+        
+        // Appendiamo ai piatti esistenti per non cancellare roba se uno aggiunge
+        const newMenu = [...(currentMenu || []), ...lines];
+        // Rimuovi duplicati
+        const uniqueMenu = [...new Set(newMenu)];
+
+        try {
+            // CORRETTO: Uso il riferimento al Documento
+            await setDoc(DAILY_MENU_DOC_REF, { items: uniqueMenu }, { merge: true });
+            alert("Menu aggiornato con successo! 🍝");
+            onClose();
+        } catch(e) {
+            console.error(e);
+            alert("Errore aggiornamento menu");
+        }
+        setLoading(false);
+    };
+    
+    const handleClear = async () => {
+        if (db && !window.confirm("Vuoi cancellare tutto il menu del giorno per tutti?")) return;
+        setLoading(true);
+        try {
+           // CORRETTO: Uso il riferimento al Documento
+           await setDoc(DAILY_MENU_DOC_REF, { items: [] }, { merge: true });
+           onClose();
+        } catch (e) {
+           console.error("Errore pulizia menu:", e);
+        }
+        setLoading(false);
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center p-4 relative bg-gray-900 font-sans">
-            {/* SFONDO CON IMMAGINE */}
-            <div className="absolute inset-0 bg-cover bg-center z-0" style={{ backgroundImage: `url(${LOGIN_BG_URL})`, opacity: 0.6 }}></div>
-            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent z-0"></div>
-            <div className="bg-white/95 backdrop-blur-xl p-8 rounded-3xl shadow-2xl w-full max-w-md border-t-8 border-green-700 relative z-10 animate-fade-in-up">
-                <div className="text-center mb-8">
-                    <div className="inline-block p-4 bg-green-50 rounded-full shadow-inner border border-green-200 mb-4">
-                        <span className="text-4xl">☕</span>
-                    </div>
-                    <h1 className="text-3xl font-extrabold text-green-900 mb-2 font-serif tracking-tight">7 MILA CAFFÈ</h1>
-                    <p className="text-green-700 text-xs italic border-t border-green-200 pt-3 font-medium tracking-wide">
-                        "Anche nel caos del lavoro,<br/>il pranzo resta un momento sacro."
-                    </p>
-                </div>
-                <div className="space-y-5">
-                    <div className="relative">
-                        <span className="absolute left-3 top-3.5 text-gray-400">👤</span>
-                        <select className="w-full pl-10 p-3 border-2 border-gray-200 rounded-xl bg-white font-bold text-gray-700 outline-none focus:border-green-500 transition-colors appearance-none" value={selId} onChange={e => setSelId(e.target.value)}>
-                            <option value="">Chi sei?</option>
-                            {COLLEAGUES_LIST.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                        </select>
-                    </div>
-                    <div className="relative">
-                        <span className="absolute left-3 top-3.5 text-gray-400">🔒</span>
-                        <input type="password" placeholder="PIN" maxLength={4} className="w-full pl-10 p-3 border-2 border-gray-200 rounded-xl bg-white text-center font-bold text-xl tracking-widest text-gray-700 outline-none focus:border-green-500 transition-colors" value={pin} onChange={e => setPin(e.target.value)} />
-                    </div>
-                    {error && <div className="bg-red-50 text-red-600 text-center text-sm font-bold p-3 rounded-lg border border-red-100 animate-pulse">{error}</div>}
-                    <button onClick={handleLogin} className="w-full bg-gradient-to-r from-green-700 to-green-600 hover:from-green-800 hover:to-green-700 text-white font-bold py-4 rounded-xl shadow-lg transform transition active:scale-95">ENTRA</button>
+        <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
+            <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 relative">
+                <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-2xl font-bold">&times;</button>
+                <h2 className="text-xl font-bold text-purple-800 mb-2 flex items-center gap-2">📝 Inserisci Menu</h2>
+                <p className="text-sm text-gray-500 mb-4">Hai ricevuto il menu su WhatsApp o Email? Copia il testo e incollalo qui sotto. Il sistema creerà i pulsanti per tutti.</p>
+                
+                <textarea 
+                    className="w-full border-2 border-purple-100 rounded-lg p-3 text-sm h-40 focus:border-purple-500 focus:ring-2 focus:ring-purple-200 outline-none transition-all"
+                    placeholder="Incolla qui la lista dei piatti...&#10;Lasagne&#10;Arrosto con patate&#10;Insalatona"
+                    value={bulkText}
+                    onChange={(e) => setBulkText(e.target.value)}
+                />
+
+                <div className="flex gap-3 mt-4">
+                    <button 
+                        onClick={handleClear}
+                        className="flex-1 bg-white border border-red-200 text-red-600 py-2 rounded-lg font-bold text-sm hover:bg-red-50"
+                        disabled={loading}
+                    >
+                        🗑️ Svuota Tutto
+                    </button>
+                    <button 
+                        onClick={handleImport}
+                        className="flex-1 bg-purple-600 text-white py-2 rounded-lg font-bold text-sm hover:bg-purple-700 shadow-md disabled:opacity-50"
+                        disabled={loading}
+                    >
+                        {loading ? "Salvataggio..." : "✅ Pubblica Menu"}
+                    </button>
                 </div>
             </div>
         </div>
     );
 };
-
-// --- STATISTICHE BUONI (NON USATO NELLA VERSIONE FINALE) ---
-const UserStatsModal = ({ onClose }) => { return null; }; // Componente rimosso per stabilità
 
 // --- COMPONENTE ADMIN: STORICO ORDINI ---
 const AdminHistory = ({ db, onClose, user }) => {
-    const [selectedDate, setSelectedDate] = useState(formatDate(new Date()));
-    const [historyOrders, setHistoryOrders] = useState([]);
-    const [historyStatus, setHistoryStatus] = useState('');
-    const [historyAuthor, setHistoryAuthor] = useState('');
-    const [loadingHistory, setLoadingHistory] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(formatDate(new Date()));
+  const [historyOrders, setHistoryOrders] = useState([]);
+  const [historyStatus, setHistoryStatus] = useState('');
+  const [historyAuthor, setHistoryAuthor] = useState('');
+  const [loadingHistory, setLoadingHistory] = useState(false);
 
-    const loadHistory = async (dateStr) => {
-        setLoadingHistory(true);
-        try {
-            const docRef = doc(db, PUBLIC_ORDERS_COLLECTION, dateStr);
-            const docSnap = await getDoc(docRef);
-            if (docSnap.exists() && docSnap.data().status === 'sent') { 
-                const rawOrders = docSnap.data().orders || [];
-                const sorted = rawOrders.sort((a, b) => a.userName.localeCompare(b.userName));
-                setHistoryOrders(sorted);
-                setHistoryStatus(docSnap.data().status || 'open');
-                setHistoryAuthor(docSnap.data().confirmedBy || '');
-            } else {
-                setHistoryOrders([]);
-                setHistoryStatus('Nessun ordine trovato o non inviato');
-                setHistoryAuthor('');
-            }
-        } catch (e) { console.error(e); }
-        setLoadingHistory(false);
-    };
+  const loadHistory = useCallback(async (dateStr) => {
+    if (!db || !BASE_ORDERS_COLLECTION) return;
+    setLoadingHistory(true);
+    try {
+      // CORRETTO: doc(CollectionRef, docId)
+      const docRef = doc(BASE_ORDERS_COLLECTION, dateStr);
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        setHistoryOrders(docSnap.data().orders || []);
+        setHistoryStatus(docSnap.data().status || 'open');
+        setHistoryAuthor(docSnap.data().confirmedBy || '');
+      } else {
+        setHistoryOrders([]);
+        setHistoryStatus('Nessun ordine trovato');
+        setHistoryAuthor('');
+      }
+    } catch (e) { console.error(e); }
+    setLoadingHistory(false);
+  }, [db]);
 
-    useEffect(() => { loadHistory(selectedDate); }, [selectedDate, db]);
+  useEffect(() => {
+    loadHistory(selectedDate);
+  }, [selectedDate, loadHistory]);
 
-    const deleteDay = async () => {
-        if (!user.isAdmin) return;
-        if (!confirm(`Sei SICURO di voler cancellare TUTTI gli ordini del ${selectedDate}? Questa azione è irreversibile.`)) return;
-        await deleteDoc(doc(db, PUBLIC_ORDERS_COLLECTION, selectedDate));
-    };
+  const deleteDay = async () => {
+      if (!user.isAdmin) return;
+      if (!window.confirm(`Sei SICURO di voler cancellare TUTTI gli ordini del ${selectedDate}? Questa azione è irreversibile.`)) return;
+      
+      try {
+          // CORRETTO: doc(CollectionRef, docId)
+          await deleteDoc(doc(BASE_ORDERS_COLLECTION, selectedDate));
+          alert("Giornata cancellata con successo.");
+          loadHistory(selectedDate); 
+      } catch (e) {
+          console.error(e);
+          alert("Errore cancellazione.");
+      }
+  };
 
-    return (
-        <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
-            <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full p-6 relative h-[80vh] flex flex-col">
-                <button onClick={onClose} className="absolute top-4 right-4 text-2xl text-gray-400 hover:text-gray-600">&times;</button>
-                <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">📜 Archivio Storico</h2>
-                <div className="flex gap-4 items-center mb-4 bg-gray-50 p-3 rounded border">
-                    <label className="font-bold text-sm">Seleziona Data:</label>
-                    <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="border p-1 rounded" />
-                </div>
-                <div className="flex-1 overflow-y-auto border rounded-lg p-4 bg-gray-50">
-                    {loadingHistory ? <p>Caricamento...</p> : (
-                        historyOrders.length === 0 ? <p className="text-gray-500 italic text-center">Nessun ordine ufficiale inviato in questa data.</p> : (
-                            <div className="space-y-2">
-                                {historyStatus === 'sent' && (
-                                    <div className="bg-green-100 border border-green-300 text-green-800 p-2 rounded text-sm font-bold mb-3 text-center">
-                                        ✅ Ordine inviato da: {historyAuthor || 'Sconosciuto'}
-                                    </div>
-                                )}
-                                {historyOrders.map((o, i) => (
-                                    <div key={i} className="bg-white p-2 rounded border flex justify-between text-sm items-center">
-                                        <div className="flex gap-2 items-center">
-                                            <span className="font-bold text-gray-700">{o.userName}</span>
-                                            <span className="text-gray-600">{o.itemName}</span>
-                                        </div>
-                                        <span className={`text-xs px-2 py-1 rounded font-bold ${o.isTakeout ? "bg-red-100 text-red-600" : "bg-orange-100 text-orange-600"}`}>
-                                            {o.isTakeout ? "🥡 Asporto" : "☕ Bar"}
-                                        </span>
-                                    </div>
-                                ))}
-                            </div>
-                        )
-                    )}
-                </div>
-                {user.isAdmin && historyOrders.length > 0 && (
-                    <div className="mt-4 pt-4 border-t border-red-100 flex justify-end">
-                        <button onClick={deleteDay} className="text-red-600 hover:text-red-800 text-xs font-bold flex items-center gap-1 bg-red-50 px-3 py-2 rounded border border-red-200">
-                            🗑️ Elimina Tutta la Giornata (Admin)
-                        </button>
-                    </div>
-                )}
-            </div>
+  return (
+    <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
+      <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full p-6 relative h-[80vh] flex flex-col">
+        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-2xl font-bold">&times;</button>
+        <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">📜 Archivio Storico</h2>
+        
+        <div className="flex gap-4 items-center mb-4 bg-gray-50 p-3 rounded border">
+          <label className="font-bold text-sm">Seleziona Data:</label>
+          <input 
+            type="date" 
+            value={selectedDate} 
+            onChange={(e) => setSelectedDate(e.target.value)} 
+            className="border p-1 rounded"
+          />
         </div>
-    );
+
+        <div className="flex-1 overflow-y-auto border rounded-lg p-4 bg-gray-50">
+            {loadingHistory ? <p>Caricamento...</p> : (
+              historyOrders.length === 0 ? <p className="text-gray-500 italic">Nessun ordine in questa data.</p> : (
+                <div className="space-y-2">
+                  {historyStatus === 'sent' && (
+                    <div className="bg-green-100 border border-green-300 text-green-800 p-2 rounded text-sm font-bold mb-3 text-center">
+                        ✅ Ordine inviato da: {historyAuthor || 'Sconosciuto'}
+                    </div>
+                  )}
+                  {historyOrders.map((o, i) => (
+                    <div key={i} className="bg-white p-2 rounded border flex justify-between text-sm items-center">
+                      <div className="flex gap-2 items-center">
+                        <span className="font-bold text-gray-700">{o.userName}</span>
+                        <span className="text-gray-600">{o.itemName}</span>
+                      </div>
+                      <span className={`text-xs px-2 py-1 rounded font-bold ${o.isTakeout ? "bg-red-100 text-red-600" : "bg-orange-100 text-orange-600"}`}>
+                        {o.isTakeout ? "🥡 Asporto" : "☕ Bar"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )
+            )}
+        </div>
+        
+        {user.isAdmin && historyOrders.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-red-100 flex justify-end">
+                <button 
+                    onClick={deleteDay}
+                    className="text-red-600 hover:text-red-800 text-xs font-bold flex items-center gap-1 bg-red-50 px-3 py-2 rounded border border-red-200"
+                >
+                    🗑️ Elimina Tutta la Giornata (Admin)
+                </button>
+            </div>
+        )}
+      </div>
+    </div>
+  );
 };
 
-const AdminCalendar = ({ activeDates, onToggleDate, todayStr }) => {
-    const [currentMonth, setCurrentMonth] = useState(new Date());
-    const daysInMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0).getDate();
-    const firstDay = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1).getDay();
-    const changeMonth = (v) => { const d = new Date(currentMonth); d.setMonth(d.getMonth() + v); setCurrentMonth(d); };
-    const startOffset = (firstDay + 6) % 7;
-    const days = Array.from({ length: daysInMonth }, (_, i) => new Date(currentMonth.getFullYear(), currentMonth.getMonth(), i + 1));
+// --- COMPONENTE ADMIN: PANNELLO COMPLETO ---
+const AdminPanel = ({ db, currentDay, onClose, colleaguesList, onToggleForceOpen, isForceOpen }) => {
+  const [activeTab, setActiveTab] = useState('calendar'); 
+  const [blockedDates, setBlockedDates] = useState([]);
+  const [settings, setSettings] = useState(INITIAL_SETTINGS);
+  const [loading, setLoading] = useState(true);
 
-    return (
-        <div className="p-2">
-            <div className="flex justify-between items-center mb-4 bg-gray-100 p-2 rounded-lg">
-                <button onClick={() => changeMonth(-1)} className="px-4 py-1 font-bold text-lg bg-white rounded shadow text-gray-600 hover:bg-gray-50">❮</button>
-                <h4 className="font-bold capitalize text-gray-700 text-lg">{currentMonth.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })}</h4>
-                <button onClick={() => changeMonth(1)} className="px-4 py-1 font-bold text-lg bg-white rounded shadow text-gray-600 hover:bg-gray-50">❯</button>
-            </div>
-            <div className="grid grid-cols-7 gap-1 text-center mb-1">
-                {['L', 'M', 'M', 'G', 'V', 'S', 'D'].map(d => <span key={d} className="text-xs font-bold text-gray-500">{d}</span>)}
-            </div>
-            <div className="grid grid-cols-7 gap-1">
-                {Array.from({ length: startOffset }).map((_, i) => <div key={`${currentMonth.getFullYear()}-${currentMonth.getMonth()}-empty-${i}`}></div>)}
-                {days.map(d => {
-                    const dStr = formatDate(d);
-                    const isActive = activeDates.includes(dStr);
-                    const isToday = todayStr === dStr;
+  // Load blocked dates and settings
+  useEffect(() => {
+    if (!db || !SETTINGS_DOC_REF || !HOLIDAYS_DOC_REF) return;
+    setLoading(true);
+    
+    const fetchAdminData = async () => {
+        try {
+            // CORRETTO: Uso i riferimenti al Documento
+            const [holidaysSnap, settingsSnap] = await Promise.all([
+                getDoc(HOLIDAYS_DOC_REF),
+                getDoc(SETTINGS_DOC_REF)
+            ]);
+
+            if (holidaysSnap.exists()) setBlockedDates(holidaysSnap.data().dates || []);
+            if (settingsSnap.exists()) setSettings(settingsSnap.data());
+        } catch (e) {
+            console.error("Errore caricamento dati Admin:", e);
+        }
+        setLoading(false);
+    };
+    fetchAdminData();
+  }, [db]);
+
+  const toggleDate = async (dateStr) => {
+    if (!HOLIDAYS_DOC_REF) return;
+    let newDates = [];
+    if (blockedDates.includes(dateStr)) {
+      newDates = blockedDates.filter(d => d !== dateStr);
+    } else {
+      newDates = [...blockedDates, dateStr];
+    }
+    setBlockedDates(newDates);
+    try {
+        // CORRETTO: Uso il riferimento al Documento
+        await setDoc(HOLIDAYS_DOC_REF, { dates: newDates }, { merge: true });
+    } catch (e) { console.error("Errore aggiornamento holidays:", e); }
+  };
+
+  const saveSettings = async () => {
+    if (!db || !SETTINGS_DOC_REF) return;
+    try {
+      // CORRETTO: Uso il riferimento al Documento
+      await setDoc(SETTINGS_DOC_REF, settings, { merge: true });
+      alert("Impostazioni salvate!");
+    } catch (e) { console.error(e); alert("Errore impostazioni"); }
+  };
+
+  // Funzione per generare mail credenziali (FIXED: USA GMAIL WEB)
+  const sendCreds = (user) => {
+      const subject = encodeURIComponent("Credenziali App Pranzo");
+      const adminName = colleaguesList.find(c => c.isAdmin)?.name || "l'amministratore";
+      const body = encodeURIComponent(`Ciao ${user.name},\n\necco il tuo PIN per accedere all'app dei pasti: ${user.pin}\n\nSe vuoi cambiarlo, contatta l\'amministratore (probabilmente ${adminName}).\n\nSaluti!`);
+      const gmailLink = `https://mail.google.com/mail/?view=cm&fs=1&to=${user.email}&su=${subject}&body=${body}`;
+      window.open(gmailLink, '_blank');
+  };
+
+  const upcoming = ALLOWED_DATES_LIST.filter(d => d >= currentDay).slice(0, 10);
+  
+  if (loading) return <div className="p-6"><LoadingSpinner text="Caricamento Pannello Admin..." /></div>;
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
+      <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full h-[85vh] flex flex-col relative overflow-hidden">
+        <div className="p-4 border-b flex justify-between items-center bg-gray-50">
+           <h2 className="text-xl font-bold text-gray-800">⚙️ Pannello Amministrazione</h2>
+           <button onClick={onClose} className="text-gray-500 hover:text-red-600 font-bold text-xl">&times;</button>
+        </div>
+        
+        <div className="flex border-b overflow-x-auto">
+          <button onClick={() => setActiveTab('calendar')} className={`flex-1 py-3 font-bold text-sm px-4 whitespace-nowrap ${activeTab === 'calendar' ? 'border-b-2 border-orange-500 text-orange-600 bg-orange-50' : 'text-gray-500 hover:bg-gray-50'}`}>📅 CALENDARIO</button>
+          <button onClick={() => setActiveTab('users')} className={`flex-1 py-3 font-bold text-sm px-4 whitespace-nowrap ${activeTab === 'users' ? 'border-b-2 border-blue-500 text-blue-600 bg-blue-50' : 'text-gray-500 hover:bg-gray-50'}`}>👥 UTENTI</button>
+          <button onClick={() => setActiveTab('settings')} className={`flex-1 py-3 font-bold text-sm px-4 whitespace-nowrap ${activeTab === 'settings' ? 'border-b-2 border-gray-500 text-gray-800 bg-gray-100' : 'text-gray-500 hover:bg-gray-50'}`}>⚙️ IMPOSTAZIONI</button>
+        </div>
+
+        <div className="p-6 overflow-y-auto flex-1">
+            {activeTab === 'calendar' && (
+              <div className="space-y-6">
+                <div className="bg-purple-50 p-4 rounded-lg border border-purple-200 flex items-center justify-between">
+                    <div>
+                        <p className="text-purple-800 font-bold text-sm">Stato Giornata Attuale:</p>
+                        <p className={`text-xs font-bold ${isForceOpen ? 'text-green-600' : 'text-red-500'}`}>
+                            {isForceOpen ? "🔓 SBLOCCATO (Forzato Aperto)" : "🔴 BLOCCATO (Regole Standard)"}
+                        </p>
+                    </div>
+                    <button 
+                        onClick={() => onToggleForceOpen(!isForceOpen)}
+                        className={`px-4 py-2 rounded text-xs font-bold transition-all ${isForceOpen ? 'bg-green-600 text-white hover:bg-green-700' : 'bg-red-100 text-red-600 border border-red-300 hover:bg-red-200'}`}
+                    >
+                        {isForceOpen ? "Blocca Giornata" : "🔓 Sblocca / Forza Apertura"}
+                    </button>
+                </div>
+                
+                <hr className="border-gray-200" />
+                
+                <div>
+                    <p className="text-sm text-gray-500 mb-4">Clicca su una data (Lunedì/Giovedì) per bloccare l'ufficio (Ferie/Festa). Applica a tutti.</p>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {upcoming.map(date => {
+                    const isBlocked = blockedDates.includes(date);
+                    const dateObj = new Date(date);
                     return (
-                        <button key={dStr} onClick={() => onToggleDate(dStr)} className={`p-2 rounded text-sm font-bold transition-all border ${isToday ? 'ring-2 ring-blue-500 ring-offset-1 shadow-md z-10' : ''} ${isActive ? 'bg-green-600 text-white shadow-md hover:bg-green-700' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}>
-                            {d.getDate()}
+                        <button 
+                        key={date}
+                        onClick={() => toggleDate(date)}
+                        className={`p-3 rounded border text-sm font-bold transition-all ${isBlocked ? 'bg-red-100 border-red-500 text-red-700 line-through' : 'bg-green-50 border-green-200 text-green-700 hover:bg-green-100'}`}
+                        >
+                        {dateObj.toLocaleDateString('it-IT', { weekday: 'short', day: '2-digit', month: 'short' })}
                         </button>
                     )
-                })}
-            </div>
-            <p className="text-center text-xs text-gray-400 mt-3">Verde = Aperto. Grigio = Chiuso.</p>
+                    })}
+                    </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'users' && (
+              <div className="space-y-4">
+                <div className="p-4 bg-blue-50 rounded border border-blue-100 text-center">
+                    <p className="text-blue-800 font-bold text-sm mb-1">Gestione Utenti</p>
+                    <p className="text-xs text-blue-600">
+                        La lista utenti e PIN è gestita nel codice. Qui puoi inviare il PIN tramite la tua Gmail.
+                    </p>
+                </div>
+                
+                <div className="border rounded overflow-hidden">
+                    {colleaguesList.map(user => (
+                        <div key={user.id} className="flex justify-between items-center p-3 border-b last:border-0 hover:bg-gray-50">
+                            <div>
+                                <p className="font-bold text-gray-700">{user.name}</p>
+                                <p className="text-xs text-gray-400">{user.email}</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <span className="text-xs bg-gray-100 px-2 py-1 rounded text-gray-500 font-mono">{user.pin}</span>
+                                <button 
+                                 onClick={() => sendCreds(user)}
+                                 className="text-xs bg-blue-100 text-blue-700 px-3 py-1.5 rounded font-bold hover:bg-blue-200 flex items-center gap-1"
+                                >
+                                    ✉️ Invia PIN
+                                </button>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'settings' && (
+              <div className="space-y-4">
+                 <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                     <p className="text-xs text-yellow-800 font-bold mb-2">Queste impostazioni sono condivise e applicate a tutti gli utenti.</p>
+                     <p className="text-xs text-yellow-700">Nota: Gli orari di chiusura (12:00, 13:00) sono hardcoded nel codice dell'app.</p>
+                 </div>
+                 <div className="bg-gray-100 p-4 rounded-lg">
+                   <label className="block text-sm font-bold text-gray-700 mb-1">Email del Bar (Destinatario Ordini)</label>
+                   <input className="w-full p-2 border rounded" value={settings.emailBar} onChange={e => setSettings({...settings, emailBar: e.target.value})} />
+                 </div>
+                 <div className="bg-gray-100 p-4 rounded-lg">
+                   <label className="block text-sm font-bold text-gray-700 mb-1">Telefono del Bar (Per emergenze)</label>
+                   <input className="w-full p-2 border rounded" value={settings.phoneBar} onChange={e => setSettings({...settings, phoneBar: e.target.value})} />
+                 </div>
+                 <button onClick={saveSettings} className="bg-green-600 text-white px-6 py-2 rounded font-bold shadow hover:bg-green-700">Salva Impostazioni</button>
+              </div>
+            )}
         </div>
-    );
+      </div>
+    </div>
+  );
 };
 
-const AdminPanel = ({ db, onClose, colleaguesList, adminOverride, onToggleForceOpen, adminName, todayStr }) => {
-    const [tab, setTab] = useState('cal');
-    const [settings, setSettings] = useState(INITIAL_SETTINGS);
-    const [activeDates, setActiveDates] = useState([]);
-    const [loadingDates, setLoadingDates] = useState(true);
+// --- COMPONENTE PRINCIPALE ---
+const App = () => {
+  const [user, setUser] = useState(null); 
+  const [isAuthReady, setIsAuthReady] = useState(false);
+  
+  // Dati dinamici
+  const [appSettings, setAppSettings] = useState(INITIAL_SETTINGS);
+  const [dataLoaded, setDataLoaded] = useState(false); 
+  const [dailyMenu, setDailyMenu] = useState([]); 
+  const [adminOverride, setAdminOverride] = useState(false); // STATO PER FORZARE APERTURA
 
-    useEffect(() => {
-        if (!db) return;
-        getDoc(doc(db, HOLIDAYS_DOC_PATH)).then(snap => {
-            if (snap.exists() && snap.data().activeDates) setActiveDates(snap.data().activeDates);
-            else setDoc(doc(db, HOLIDAYS_DOC_PATH), { activeDates: generateAllowedDates() }, { merge: true }).catch(console.error);
-        }).catch(console.error).finally(() => setLoadingDates(false));
-        getDoc(doc(db, SETTINGS_DOC_PATH, 'main')).then(snap => { if (snap.exists()) setSettings(snap.data()); });
-    }, [db]);
+  // Dati Ordini del Giorno
+  const [orders, setOrders] = useState([]);
+  const [orderStatus, setOrderStatus] = useState('open'); 
+  const [orderAuthor, setOrderAuthor] = useState('');
+  
+  const [actingAsUser, setActingAsUser] = useState(null);
 
-    const handleToggleDate = async (dStr) => {
-        const newDates = activeDates.includes(dStr) ? activeDates.filter(d => d !== dStr) : [...activeDates, dStr];
-        setActiveDates(newDates);
-        await setDoc(doc(db, HOLIDAYS_DOC_PATH), { activeDates: newDates }, { merge: true });
+  // Dati dell'Ordine Corrente
+  const [dishName, setDishName] = useState('');
+  const [selectedWater, setSelectedWater] = useState(''); 
+  const [diningChoice, setDiningChoice] = useState('');
+  
+  const [errors, setErrors] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState('');
+  const [showHelp, setShowHelp] = useState(false); 
+  const [showAdminPanel, setShowAdminPanel] = useState(false); 
+  const [showHistory, setShowHistory] = useState(false); 
+  const [showMenuManager, setShowMenuManager] = useState(false); 
+
+  const todayDate = new Date();
+  const todayStr = formatDate(todayDate);
+  const [blockedDates, setBlockedDates] = useState([]);
+  const [isShopOpen, setIsShopOpen] = useState(true);
+  const [initTimeout, setInitTimeout] = useState(false);
+
+  const [time, setTime] = useState(new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  
+  const hour = time.getHours();
+  const minute = time.getMinutes();
+
+  // LOGICA ORARIA - Se Admin Override è attivo, ignora le restrizioni orarie
+  const isLateWarning = !adminOverride && ((hour === 10 && minute >= 30) || (hour === 11 && minute < 60)); // 10:30 a 11:59
+  const isBookingClosed = !adminOverride && (hour >= 12); // Dalle 12:00 in poi
+  const isEmailClosed = !adminOverride && (hour >= 13); // Dalle 13:00 in poi
+
+  const forceStart = () => {
+    setInitTimeout(true);
+  };
+
+  // 1. INIT FIREBASE & LOAD CORE DATA
+  useEffect(() => {
+    if (!db || !auth || !SETTINGS_DOC_REF || !DAILY_MENU_DOC_REF || !HOLIDAYS_DOC_REF) return;
+    
+    const timeoutId = setTimeout(() => {
+      setInitTimeout(true);
+    }, 7000);
+
+    const subscribeToData = () => {
+       // CORRETTO: Uso i riferimenti al Documento
+       const unsubSettings = onSnapshot(SETTINGS_DOC_REF, (snap) => {
+          if (snap.exists()) setAppSettings(snap.data());
+       });
+       
+       const unsubMenu = onSnapshot(DAILY_MENU_DOC_REF, (snap) => {
+           if (snap.exists()) setDailyMenu(snap.data().items || []);
+       });
+
+       return () => { unsubSettings(); unsubMenu(); };
     };
 
-    const saveSettings = async () => {
-        await setDoc(doc(db, SETTINGS_DOC_PATH, 'main'), settings, { merge: true });
-        alert("Salvato!");
+    const checkDateAccess = async () => {
+      // La logica isBaseValid controlla se è un giorno di base (Lunedì o Giovedì)
+      const isBaseValid = ALLOWED_DATES_LIST.includes(todayStr);
+      
+      try {
+        // Controllo se il giorno è stato bloccato come Festività/Ferie dall'Admin
+        const snap = await getDoc(HOLIDAYS_DOC_REF);
+        if (snap.exists()) {
+          const blocked = snap.data().dates || [];
+          setBlockedDates(blocked);
+          
+          const isBlockedByAdmin = blocked.includes(todayStr);
+          
+          // isShopOpen è true se è un giorno base E non è stato bloccato dall'admin.
+          setIsShopOpen(isBaseValid && !isBlockedByAdmin);
+          
+        } else {
+            // Se non ci sono blocchi, usa solo la logica base (Lunedì/Giovedì)
+            setIsShopOpen(isBaseValid);
+        }
+      } catch (e) { 
+        console.error("Err date check", e);
+        // Fallback: se errore DB ma è un giorno base, assumi sia aperto
+        setIsShopOpen(isBaseValid); 
+      }
+      setLoading(false); // Il caricamento è completato dopo questo check
     };
 
-    const sendCreds = (user) => {
-        const subject = encodeURIComponent("Credenziali App Pranzo");
-        const body = encodeURIComponent(`Ciao ${user.name},\n\necco il tuo PIN per accedere all'app dei pasti: ${user.pin}\n\nSe vuoi cambiarlo, contattami.\n\nSaluti,\n${adminName}`);
-        const gmailLink = `https://mail.google.com/mail/?view=cm&fs=1&to=${user.email}&su=${subject}&body=${body}`;
+    const initAuth = async () => {
+        if (!auth.currentUser) {
+            if (initialAuthToken) await signInWithCustomToken(auth, initialAuthToken);
+            else await signInAnonymously(auth);
+        }
+    };
+
+    // Sequenza di avvio
+    initAuth().then(() => {
+      subscribeToData();
+      checkDateAccess().finally(() => {
+        setDataLoaded(true);
+      });
+    });
+
+    onAuthStateChanged(auth, (u) => {
+      if (u) {
+        setIsAuthReady(true);
+        clearTimeout(timeoutId);
+      }
+    });
+
+    return () => clearTimeout(timeoutId);
+  }, [db, auth, todayStr]);
+
+  // Forzatura manuale caricamento (per evitare blocchi)
+  useEffect(() => {
+    if (initTimeout && loading) {
+      console.warn("Timeout caricamento: forzo avvio con dati locali.");
+      setAppSettings(INITIAL_SETTINGS);
+      setDataLoaded(true);
+      setIsAuthReady(true);
+      setLoading(false);
+    }
+  }, [initTimeout, loading]);
+
+  // Restore user session
+  useEffect(() => {
+      if (dataLoaded && isAuthReady && !user) {
+          const savedUserId = sessionStorage.getItem('mealAppUser');
+          if (savedUserId) {
+            const found = COLLEAGUES_LIST.find(c => c.id === savedUserId);
+            if (found) {
+                setUser(found);
+                setActingAsUser(found); 
+            }
+          }
+      }
+  }, [dataLoaded, isAuthReady, user]);
+
+  // 2. LISTENER ORDINI
+  useEffect(() => {
+    if (!db || !isAuthReady || !BASE_ORDERS_COLLECTION) return;
+    
+    // CORRETTO: doc(CollectionRef, docId)
+    const docRef = doc(BASE_ORDERS_COLLECTION, todayStr);
+    
+    const unsubscribe = onSnapshot(docRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        const newOrders = data.orders || [];
+        setOrders(newOrders);
+        setOrderStatus(data.status || 'open');
+        setOrderAuthor(data.confirmedBy || '');
+        
+        // Sincronizza lo stato dell'ordine dell'utente attivo
+        if (actingAsUser) {
+          const existingOrder = newOrders.find(o => o.userId === actingAsUser.id);
+          if (existingOrder) {
+            setDishName(existingOrder.itemName || '');
+            setSelectedWater(existingOrder.waterChoice || '');
+            setDiningChoice(existingOrder.isTakeout ? 'asporto' : 'bar');
+          } else if (actingAsUser.id === user?.id) {
+            // Se l'utente principale cancella il suo ordine, pulisci il form
+             setDishName('');
+             setSelectedWater('');
+             setDiningChoice('');
+          }
+        }
+      } else {
+        setOrders([]);
+        setOrderStatus('open');
+        setOrderAuthor('');
+        if (actingAsUser?.id === user?.id) {
+          setDishName('');
+          setSelectedWater('');
+          setDiningChoice('');
+        }
+      }
+    }, (err) => {
+      console.error("Errore listener ordini:", err);
+    });
+
+    return () => unsubscribe();
+  }, [db, isAuthReady, todayStr, user, actingAsUser]);
+
+  const handleLogin = (colleague) => {
+    setUser(colleague);
+    setActingAsUser(colleague);
+    sessionStorage.setItem('mealAppUser', colleague.id);
+  };
+
+  const handleLogout = () => {
+    setUser(null);
+    setActingAsUser(null);
+    sessionStorage.removeItem('mealAppUser');
+    // Non facciamo signOut di Firebase perché usiamo l'autenticazione anonima/custom
+  };
+  
+  const handleAdminUserChange = (e) => {
+      const targetId = e.target.value;
+      const targetUser = COLLEAGUES_LIST.find(c => c.id === targetId);
+      if (targetUser) {
+          setActingAsUser(targetUser);
+          setMessage(''); 
+      }
+  };
+
+  const adminEditOrder = (targetUserId) => {
+      const targetUser = COLLEAGUES_LIST.find(c => c.id === targetUserId);
+      if(targetUser) setActingAsUser(targetUser);
+  };
+
+  const adminDeleteOrder = async (targetUserId) => {
+      if (!window.confirm("Sei sicuro di voler eliminare questo ordine?")) return;
+      if (!db || !BASE_ORDERS_COLLECTION) return;
+      try {
+        // CORRETTO: doc(CollectionRef, docId)
+        const orderRef = doc(BASE_ORDERS_COLLECTION, todayStr);
+        await updateDoc(orderRef, { orders: orders.filter(o => o.userId !== targetUserId) });
+      } catch(e) { console.error(e); }
+  };
+
+  const placeOrder = async () => {
+    if (orderStatus === 'sent' && !user.isAdmin) { window.alert("Ordine già inviato al bar! Non puoi modificare."); return; }
+    if (isBookingClosed && !user.isAdmin && !adminOverride) { window.alert("Troppo tardi! Sono passate le 12:00. Solo l'admin può modificare."); return; }
+
+    const newErrors = {};
+    let hasError = false;
+    
+    // VALIDAZIONE AGGIUNTA QUI
+    if (!dishName || dishName.trim() === '') { newErrors.dishName = true; hasError = true; }
+    if (!selectedWater) { newErrors.water = true; hasError = true; }
+    if (!diningChoice) { newErrors.dining = true; hasError = true; }
+
+    setErrors(newErrors);
+
+    if (hasError) {
+      setTimeout(() => window.alert("⚠️ Compila tutti i campi evidenziati in rosso!"), 100);
+      return; 
+    }
+    
+    if (!db || !BASE_ORDERS_COLLECTION) return;
+
+    // CORRETTO: doc(CollectionRef, docId)
+    const orderRef = doc(BASE_ORDERS_COLLECTION, todayStr);
+    const cleanDishName = dishName.charAt(0).toUpperCase() + dishName.slice(1);
+
+    const newOrder = {
+      userId: actingAsUser.id,
+      userName: actingAsUser.name,
+      itemName: cleanDishName,
+      waterChoice: selectedWater,
+      isTakeout: diningChoice === 'asporto',
+      timestamp: Date.now(),
+    };
+
+    try {
+      await setDoc(orderRef, { mealDate: todayStr }, { merge: true });
+      const updatedOrders = orders.filter(o => o.userId !== actingAsUser.id).concat([newOrder]);
+      await updateDoc(orderRef, { orders: updatedOrders });
+      
+      if (user.id === actingAsUser.id) {
+          setMessage("Ordine salvato! Ricordati di inviare se sei l'ultimo.");
+      } else {
+          setMessage(`Ordine salvato per ${actingAsUser.name}!`);
+      }
+      setErrors({});
+    } catch (e) { console.error(e); setMessage("Errore invio ordine"); }
+  };
+
+  const cancelOrder = async () => {
+    if (orderStatus === 'sent' && !user.isAdmin) { window.alert("Ordine già inviato al bar! Non puoi cancellare."); return; }
+    if (!db || !BASE_ORDERS_COLLECTION) return;
+    try {
+      // CORRETTO: doc(CollectionRef, docId)
+      const orderRef = doc(BASE_ORDERS_COLLECTION, todayStr);
+      await updateDoc(orderRef, { orders: orders.filter(o => o.userId !== actingAsUser.id) });
+      setDishName('');
+      setSelectedWater('');
+      setDiningChoice('');
+      setMessage("Ordine annullato 🗑️");
+    } catch (e) { console.error(e); }
+  };
+  
+  const generateMailBody = () => {
+      const allOrders = orders;
+      if (allOrders.length === 0) return "Nessun ordine presente per oggi.";
+
+      const bar = allOrders.filter(o => !o.isTakeout);
+      const takeout = allOrders.filter(o => o.isTakeout);
+
+      let body = `Ordine Pranzo di Gruppo - Data: ${todayDate.toLocaleDateString('it-IT')}\n\n`;
+
+      if (bar.length > 0) {
+          body += `--- ☕ ORDINI AL BAR (${bar.length}) ---\n`;
+          bar.forEach(o => {
+              body += `- ${o.userName}: ${o.itemName} (${o.waterChoice === 'Nessuna' ? 'No acqua' : o.waterChoice})\n`;
+          });
+          body += '\n';
+      }
+
+      if (takeout.length > 0) {
+          body += `--- 🥡 ORDINI DA ASPORTO (${takeout.length}) ---\n`;
+          takeout.forEach(o => {
+              body += `- ${o.userName}: ${o.itemName} (${o.waterChoice === 'Nessuna' ? 'No acqua' : o.waterChoice})\n`;
+          });
+          body += '\n';
+      }
+      
+      body += `\nTotale Ordini: ${allOrders.length}\n\n`;
+      body += `Inviato da: ${user.name}\n`;
+      
+      // Aggiungi tutti i colleghi in CC (eccetto il mittente e gli admin che non vogliono essere in CC)
+      const ccList = COLLEAGUES_LIST
+        .filter(c => c.id !== user.id && c.email)
+        .map(c => c.email)
+        .join(',');
+
+      return { body: encodeURIComponent(body), cc: encodeURIComponent(ccList) };
+  };
+
+  const openMailLink = (isGmail) => {
+    if (orders.length === 0) {
+        window.alert("Non ci sono ordini da inviare!");
+        return;
+    }
+    const { body, cc } = generateMailBody();
+    const subject = encodeURIComponent(`Ordine Pranzo - ${todayDate.toLocaleDateString('it-IT')}`);
+    
+    if (isGmail) {
+        // Usa GMAIL WEB per PC/Mobile (più affidabile per CC)
+        const gmailLink = `https://mail.google.com/mail/?view=cm&fs=1&to=${appSettings.emailBar}&su=${subject}&body=${body}&cc=${cc}`;
         window.open(gmailLink, '_blank');
-    };
+    } else {
+        // Usa mailto: per app predefinite (meno affidabile per CC multipli)
+        const mailtoLink = `mailto:${appSettings.emailBar}?subject=${subject}&body=${body}&cc=${cc}`;
+        window.open(mailtoLink);
+    }
+  };
+  
+  const openGmail = () => openMailLink(true);
+  const openDefaultMail = () => openMailLink(false);
 
-    return (
-        <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
-            <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full h-[85vh] flex flex-col relative overflow-hidden">
-                <div className="p-4 border-b flex justify-between items-center bg-gray-50">
-                    <h2 className="font-bold text-lg text-gray-800">⚙️ Amministrazione di {adminName}</h2>
-                    <button onClick={onClose} className="text-2xl text-gray-400 hover:text-gray-600">&times;</button>
+  const markAsSent = async () => {
+    if (!window.confirm("Sei sicuro di aver inviato l'email? Questo bloccherà gli ordini per tutti.")) return;
+    if (!db || !BASE_ORDERS_COLLECTION) return;
+    try {
+      // CORRETTO: doc(CollectionRef, docId)
+      const orderRef = doc(BASE_ORDERS_COLLECTION, todayStr);
+      await setDoc(orderRef, { 
+        status: 'sent',
+        confirmedBy: user.name 
+      }, { merge: true });
+    } catch (e) { console.error("Errore update status", e); }
+  };
+
+  const unlockOrder = async () => {
+    if (!window.confirm("Vuoi davvero riaprire l'ordine? Gli utenti potranno modificare le loro scelte.")) return;
+    if (!db || !BASE_ORDERS_COLLECTION) return;
+    try {
+      // CORRETTO: doc(CollectionRef, docId)
+      const orderRef = doc(BASE_ORDERS_COLLECTION, todayStr);
+      await setDoc(orderRef, { status: 'open', confirmedBy: '' }, { merge: true });
+    } catch (e) { console.error("Errore sblocco", e); }
+  };
+
+  const openLateEmail = () => {
+    const subject = encodeURIComponent(`Ordine Tardivo/Personale - ${todayDate.toLocaleDateString('it-IT')}`);
+    // Messaggio precompilato semplice per ordine singolo
+    const body = encodeURIComponent(`Ciao, sono ${user.name}.\nVorrei ordinare per oggi:\n\n- [SCRIVI QUI IL PIATTO]\n\nGrazie!`);
+    
+    // URL specifico per GMAIL WEB
+    const gmailLink = `https://mail.google.com/mail/?view=cm&fs=1&to=${appSettings.emailBar}&su=${subject}&body=${body}`;
+    window.open(gmailLink, '_blank');
+  };
+
+  if (loading || !dataLoaded) return <div className="min-h-screen flex items-center justify-center"><LoadingSpinner text="Connessione al database..." onForceStart={forceStart} /></div>;
+
+  // --- LOGICA ACCESSO: Login sempre permesso ---
+  if (!user) return <LoginScreen onLogin={handleLogin} colleagues={COLLEAGUES_LIST} />;
+
+  const nextOpenDay = getNextOpenDay(todayStr);
+
+  // SE CHIUSO E NON OVERRIDE: isShopOpen determina se il modulo ordini è attivo
+  const isClosedView = (!isShopOpen && !adminOverride);
+
+  const barOrders = orders.filter(o => !o.isTakeout);
+  const takeoutOrders = orders.filter(o => o.isTakeout);
+
+  return (
+    <div className={`min-h-screen font-sans p-2 sm:p-6 pb-20 transition-colors duration-500 bg-gray-100`}>
+      
+      <div className={`max-w-5xl mx-auto bg-white shadow-xl rounded-2xl overflow-hidden relative transition-all duration-300`}>
+        
+        {/* TOP BAR */}
+        <div className="absolute top-4 right-4 z-50 flex flex-wrap justify-end gap-2 max-w-[300px]">
+          {/* NEW BUTTON: MENU MANAGER FOR ALL */}
+          <button onClick={() => setShowMenuManager(true)} className="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold px-3 py-1 rounded-full shadow border border-purple-500 flex items-center gap-1">
+            📝 Menu
+          </button>
+
+          {user.isAdmin && (
+            <>
+              <button onClick={() => setShowAdminPanel(true)} className="bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold px-3 py-1 rounded-full shadow border border-orange-400">
+                📅 Gestione
+              </button>
+            </>
+          )}
+          
+          <button onClick={() => setShowHistory(true)} className="bg-green-600 hover:bg-green-700 text-white text-xs font-bold px-3 py-1 rounded-full shadow border border-green-500">
+            📜 Storico
+          </button>
+          
+          <button onClick={() => setShowHelp(true)} className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-1 rounded-full shadow border border-blue-500 flex items-center gap-1">
+            <span>ℹ️</span> Guida
+          </button>
+          <button onClick={handleLogout} className="bg-white/90 hover:bg-white text-gray-800 text-xs px-3 py-1 rounded-full shadow backdrop-blur-sm border border-gray-200">
+            Esci ({user.name.split(' ')[0]})
+          </button>
+        </div>
+
+        {/* MODALI */}
+        {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
+        {showAdminPanel && <AdminPanel db={db} currentDay={todayStr} onClose={() => setShowAdminPanel(false)} colleaguesList={COLLEAGUES_LIST} onToggleForceOpen={setAdminOverride} isForceOpen={adminOverride} />}
+        {showHistory && <AdminHistory db={db} onClose={() => setShowHistory(false)} user={user} />}
+        {showMenuManager && <PublicMenuManager db={db} onClose={() => setShowMenuManager(false)} currentMenu={dailyMenu} />}
+
+        {/* BANNER */}
+        <header 
+          className="relative text-white overflow-hidden border-b-4 border-green-800 bg-cover bg-center"
+          style={{ 
+            backgroundColor: '#15803d',
+            backgroundImage: BANNER_IMAGE_URL ? `url(${BANNER_IMAGE_URL})` : 'none' 
+          }}
+        >
+           <div className={`absolute inset-0 ${BANNER_IMAGE_URL ? 'bg-black/60' : 'bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-yellow-200/10 to-green-900'}`}></div>
+           <div className="relative z-10 p-6 pt-10 flex flex-col md:flex-row justify-between items-center text-center md:text-left gap-4">
+             <div>
+               <h1 className="text-4xl font-extrabold tracking-tight uppercase drop-shadow-lg" style={{fontFamily: 'serif'}}>7 MILA CAFFÈ</h1>
+               <div className="flex items-center justify-center md:justify-start gap-2 mt-1">
+                 <span className="bg-white/90 text-green-800 px-2 py-0.5 rounded text-xs font-bold tracking-widest shadow-sm">TEL. {appSettings.phoneBar}</span>
+               </div>
+             </div>
+             <div className="hidden md:block max-w-md italic font-serif text-green-50 text-lg border-l-2 border-green-400 pl-4 drop-shadow-md">
+               "Anche nel caos del lavoro,<br/>il pranzo resta un momento sacro."
+             </div>
+           </div>
+        </header>
+
+        {/* STEPPER & OROLOGIO */}
+        <div className="bg-gray-800 text-white p-3 shadow-inner">
+             <div className="flex flex-col sm:flex-row justify-between items-center text-sm px-2 sm:px-4 mb-2 gap-2">
+                 <div className="font-medium text-gray-300">
+                   Data: <span className="text-white font-bold uppercase">{todayDate.toLocaleDateString('it-IT')}</span>
+                 </div>
+                 <div className="font-mono font-bold text-white flex items-center gap-2">
+                    {adminOverride && <span className="text-green-300 font-bold hidden sm:inline">🔓 OVERRIDE ADMIN ATTIVO </span>}
+                    {isLateWarning && !adminOverride && <span className="text-yellow-300 font-bold hidden sm:inline">⚠️ ATTENZIONE </span>}
+                    {isBookingClosed && !isEmailClosed && !adminOverride && <span className="text-orange-400 font-bold hidden sm:inline">🛑 ORDINI CHIUSI </span>}
+                    {isEmailClosed && !adminOverride && <span className="text-red-400 font-bold hidden sm:inline">🛑 EMAIL CHIUSA </span>}
+                    {time.toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'})}
+                 </div>
+             </div>
+             <div className="flex items-center justify-center gap-2 text-xs sm:text-sm">
+                 <div className={`flex items-center gap-1 px-3 py-1 rounded-full ${orderStatus !== 'sent' ? 'bg-green-600 font-bold' : 'bg-gray-700 text-gray-400'}`}>
+                    <span className="bg-white text-gray-900 rounded-full w-4 h-4 flex items-center justify-center text-[10px]">1</span>
+                    Raccolta
+                 </div>
+                 <div className="h-0.5 w-4 bg-gray-600"></div>
+                 <div className={`flex items-center gap-1 px-3 py-1 rounded-full ${orderStatus === 'sent' ? 'bg-green-600 font-bold' : 'bg-gray-700 text-gray-400'}`}>
+                    <span className="bg-white text-gray-900 rounded-full w-4 h-4 flex items-center justify-center text-[10px]">2</span>
+                    Inviato
+                 </div>
+             </div>
+        </div>
+
+        {/* --- ALERT INVIO TARDIVO (10:30 - 12:00) --- */}
+        {isLateWarning && !isBookingClosed && orderStatus !== 'sent' && (
+          <div className="bg-red-100 border-b-4 border-red-500 p-4 text-center sticky top-0 z-40 shadow-xl animate-pulse">
+               <h2 className="text-red-800 font-bold text-xl uppercase mb-2">⏰ È Tardi! Chiudi l'ordine</h2>
+               <p className="text-red-600 mb-4 text-sm font-bold">Sono passate le 10:30. Il primo che vede questo messaggio deve inviare l'email!</p>
+               <div className="flex justify-center gap-2">
+                 <button onClick={openGmail} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-6 rounded-full shadow-lg text-sm">
+                     📧 GMAIL WEB (PC)
+                 </button>
+                 <button onClick={openDefaultMail} className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-6 rounded-full shadow-lg text-sm">
+                     📱 APP EMAIL
+                 </button>
+               </div>
+          </div>
+        )}
+
+        {/* --- ALERT CRITICO (13:00+) --- */}
+        {isEmailClosed && orderStatus !== 'sent' && (
+          <div className="bg-gray-900 border-b-4 border-red-600 p-6 text-center sticky top-0 z-50 shadow-2xl">
+              <h2 className="text-white font-bold text-2xl uppercase mb-2">🛑 ORDINE WEB CHIUSO</h2>
+              <p className="text-gray-300 mb-4 text-sm">Sono passate le 13:00. Non inviare più email, il bar non la leggerebbe.</p>
+              <a href={`tel:${appSettings.phoneBar}`} className="inline-block bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-8 rounded-full shadow-lg text-lg animate-bounce">
+                  📞 CHIAMA IL BAR: {appSettings.phoneBar}
+              </a>
+              {user.isAdmin && (
+                  <div className="mt-4 border-t border-gray-700 pt-4">
+                      <p className="text-xs text-gray-400 mb-2">Area Admin: Puoi forzare l'invio se necessario.</p>
+                      <div className="flex justify-center gap-2">
+                          <button onClick={openGmail} className="bg-gray-700 hover:bg-gray-600 text-white text-xs py-2 px-4 rounded border border-gray-500">Forza Gmail</button>
+                          <button onClick={openDefaultMail} className="bg-gray-700 hover:bg-gray-600 text-white text-xs py-2 px-4 rounded border border-gray-500">Forza App Mail</button>
+                          <button onClick={markAsSent} className="bg-green-700 hover:bg-green-600 text-white text-xs py-2 px-4 rounded border border-green-500">Forza "Inviato"</button>
+                      </div>
+                  </div>
+              )}
+          </div>
+        )}
+
+        <main className="p-4 grid grid-cols-1 lg:grid-cols-12 gap-6">
+          
+          {/* LEFT: Ordine Utente */}
+          <div className="lg:col-span-8 space-y-6">
+            
+            <div className={`bg-blue-50 p-4 rounded-lg border border-blue-100 flex flex-col gap-2 ${user.isAdmin ? 'border-l-4 border-l-orange-400' : ''}`}>
+              <div className="flex items-center gap-3">
+                 <span className="text-blue-800 font-medium">Ciao,</span>
+                 <span className="font-bold text-xl text-blue-900">{user.name}</span>
+                 {user.isAdmin && <span className="bg-orange-100 text-orange-700 text-[10px] px-2 py-0.5 rounded border border-orange-300">ADMIN</span>}
+              </div>
+              
+              {/* ADMIN: SELETTORE UTENTE */}
+              {user.isAdmin && (
+                <div className="mt-2 pt-2 border-t border-blue-200">
+                    <label className="text-xs font-bold text-orange-700 uppercase block mb-1">👑 Admin: Stai ordinando per...</label>
+                    <select 
+                        value={actingAsUser?.id || user.id}
+                        onChange={handleAdminUserChange}
+                        className="w-full p-2 text-sm border border-orange-300 rounded bg-white focus:ring-2 focus:ring-orange-500 outline-none"
+                    >
+                        {COLLEAGUES_LIST.map(c => (
+                            <option key={c.id} value={c.id}>
+                                {c.id === user.id ? 'Me Stesso' : c.name}
+                            </option>
+                        ))}
+                    </select>
                 </div>
-                <div className="flex border-b">
-                    <button onClick={()=>setTab('cal')} className={`flex-1 py-3 font-bold text-xs ${tab==='cal'?'border-b-2 border-orange-500 text-orange-600':''}`}>CALENDARIO</button>
-                    <button onClick={()=>setTab('users')} className={`flex-1 py-3 font-bold text-xs ${tab==='users'?'border-b-2 border-blue-500 text-blue-600':''}`}>UTENTI</button>
-                    <button onClick={()=>setTab('set')} className={`flex-1 py-3 font-bold text-xs ${tab==='set'?'border-b-2 border-gray-500 text-gray-600':''}`}>SETTINGS</button>
-                </div>
-                <div className="flex-1 overflow-y-auto p-4">
-                    {tab === 'cal' && (
-                        <div className="space-y-4">
-                            <div className={`p-4 rounded-xl border-2 flex justify-between items-center ${adminOverride ? 'bg-green-50 border-green-500' : 'bg-red-50 border-red-200'}`}>
-                                <div><p className="font-bold text-sm text-gray-800">Stato Override</p><p className={`text-xs font-bold ${adminOverride ? 'text-green-600' : 'text-red-500'}`}>{adminOverride ? "🔓 APERTO FORZATO" : "🔴 Regole Standard"}</p></div>
-                                <button onClick={()=>onToggleForceOpen(!adminOverride)} className="bg-white border px-4 py-2 rounded-lg text-xs font-bold shadow-sm hover:shadow-md transition-all">{adminOverride ? "BLOCCA" : "SBLOCCA ORA"}</button>
+              )}
+            </div>
+
+            {/* SEZIONE 1: PIATTO */}
+            <div className={`bg-white border-2 p-5 rounded-xl shadow-lg transition-colors ${errors.dishName ? 'border-red-500 ring-4 ring-red-100' : 'border-slate-200'}`}>
+                {isClosedView ? (
+                    <div className="text-center py-10 text-gray-500">
+                        <h3 className="text-xl font-bold mb-2 text-gray-400">😴 Oggi Riposo</h3>
+                        <p className="text-sm">Il servizio ordini è chiuso oggi. Torna il prossimo giorno utile!</p>
+                        <p className="text-xs mt-2">Prossima data: {nextOpenDay}</p>
+                    </div>
+                ) : (
+                    <>
+                      <h3 className={`font-bold mb-3 text-sm uppercase tracking-wide border-b pb-1 ${errors.dishName ? 'text-red-600 border-red-200' : 'text-gray-700'}`}>1. Cosa mangi oggi?</h3>
+                      
+                      {/* MENU RAPIDO - ORA CON SCROLL ORIZZONTALE */}
+                      {dailyMenu.length > 0 && (
+                          <div className="mb-3">
+                              <p className="text-xs text-gray-500 mb-1 font-bold flex justify-between">
+                                  <span>Menu del Giorno ({dailyMenu.length} piatti):</span>
+                                  <span className="text-purple-600">Scorri ➡</span>
+                              </p>
+                              <div className="flex gap-2 overflow-x-auto pb-2 border p-2 rounded bg-gray-50 snap-x">
+                                  {dailyMenu.map((dish, i) => (
+                                      <button 
+                                          key={i}
+                                          onClick={() => { setDishName(dish); if(errors.dishName) setErrors({...errors, dishName: false}); }}
+                                          className="bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 text-xs font-bold px-3 py-1.5 rounded-full transition-colors whitespace-nowrap snap-start shadow-sm"
+                                      >
+                                          {dish}
+                                      </button>
+                                  ))}
+                              </div>
+                          </div>
+                      )}
+
+                      <input 
+                          value={dishName}
+                          onChange={(e) => {
+                          setDishName(e.target.value);
+                          if(errors.dishName) setErrors(prev => ({...prev, dishName: false}));
+                          }}
+                          disabled={orderStatus === 'sent' || isBookingClosed}
+                          placeholder={(orderStatus === 'sent' || isBookingClosed) ? "Ordine chiuso" : "Es: Insalatona pollo e noci..."}
+                          className={`w-full border-2 p-3 rounded-lg text-lg font-bold text-gray-800 outline-none transition-all placeholder:font-normal placeholder:text-gray-300 ${errors.dishName ? 'border-red-400 bg-red-50' : 'border-green-100 focus:border-green-500'} ${(orderStatus === 'sent' || isBookingClosed) ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''}`}
+                      />
+                    </>
+                )}
+            </div>
+
+            {/* SEZIONE 2 & 3 - NASCOSTA SE CHIUSO */}
+            {!isClosedView && (
+                <div className={`bg-white border-2 border-slate-200 p-5 rounded-xl shadow-lg sticky bottom-4 z-20 ${orderStatus === 'sent' || isBookingClosed ? 'opacity-75 grayscale pointer-events-none' : ''}`}>
+                    <h3 className="font-bold text-gray-700 mb-3 text-sm uppercase tracking-wide border-b pb-1">2. Completa il tuo ordine</h3>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
+                    <div>
+                        <label className={`block text-xs font-bold uppercase mb-2 ${errors.water ? 'text-red-600' : 'text-gray-500'}`}>Scelta Acqua *</label>
+                        <div className="flex gap-2 h-20">
+                            {['Nessuna', 'Naturale', 'Frizzante'].map(opt => (
+                            <div key={opt} className={`flex-1`} onClick={() => {
+                                setSelectedWater(opt);
+                                if(errors.water) setErrors(prev => ({...prev, water: false}));
+                            }}>
+                                <WaterIcon type={opt} selected={selectedWater === opt} hasError={errors.water} />
                             </div>
-                            {loadingDates ? <LoadingSpinner text="Carico calendario..." /> : 
-                                <AdminCalendar activeDates={activeDates} onToggleDate={toggleDate} todayStr={todayStr} />
-                            }
-                        </div>
-                    )}
-                    {tab === 'users' && (
-                        <div className="space-y-2">
-                            {COLLEAGUES_LIST.map(u => (
-                                <div key={u.id} className="flex justify-between items-center p-3 border-b text-sm hover:bg-gray-50">
-                                    <div><span className="font-bold text-gray-700">{u.name}</span> <span className="text-xs text-gray-400 ml-1">({u.pin})</span></div>
-                                    <button onClick={()=>sendPin(u)} className="bg-blue-50 text-blue-600 border border-blue-200 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-blue-100">✉️ Invia PIN</button>
-                                </div>
                             ))}
                         </div>
-                    )}
-                    {tab === 'set' && (
-                        <div className="space-y-4">
-                            <div><label className="text-xs font-bold text-gray-500 uppercase">Email Bar</label><input className="w-full border p-3 rounded-lg mt-1" value={settings.emailBar} onChange={e=>setSettings({...settings, emailBar:e.target.value})} /></div>
-                            <div><label className="text-xs font-bold text-gray-500 uppercase">Telefono Bar</label><input className="w-full border p-3 rounded-lg mt-1" value={settings.phoneBar} onChange={e=>setSettings({...settings, phoneBar:e.target.value})} /></div>
-                            <button onClick={saveSettings} className="w-full bg-green-600 text-white font-bold py-3 rounded-lg shadow hover:bg-green-700">Salva Impostazioni</button>
+                    </div>
+
+                    <div>
+                        <label className={`block text-xs font-bold uppercase mb-2 ${errors.dining ? 'text-red-600' : 'text-gray-500'}`}>Dove mangi? *</label>
+                        <div className="flex gap-2 h-20">
+                            {['bar', 'asporto'].map(choice => (
+                            <button 
+                                key={choice}
+                                onClick={() => {
+                                setDiningChoice(choice);
+                                if(errors.dining) setErrors(prev => ({...prev, dining: false}));
+                                }}
+                                className={`flex-1 flex flex-col items-center justify-center rounded-lg border transition-all ${
+                                diningChoice === choice 
+                                    ? (choice === 'bar' ? 'bg-orange-100 border-orange-500 ring-2 ring-orange-400 text-orange-800' : 'bg-red-100 border-red-500 ring-2 ring-red-400 text-red-800') + ' font-bold'
+                                    : errors.dining ? 'bg-red-50 border-red-500 text-red-700' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                                }`}
+                            >
+                                <span className="text-2xl">{choice === 'bar' ? '☕' : '🥡'}</span>
+                                <span className="text-xs mt-1 font-bold uppercase">{choice === 'bar' ? 'Al Bar' : 'Asporto'}</span>
+                            </button>
+                            ))}
                         </div>
-                    )}
+                    </div>
+                    </div>
+
+                    <div className="pt-2 border-t mt-2">
+                    {orderStatus === 'sent' && !user.isAdmin ? (
+                        <div className="bg-green-100 p-3 rounded-lg text-center border border-green-300">
+                            <span className="text-green-800 font-bold text-lg">🔒 Ordine Inviato</span>
+                            <p className="text-green-700 text-xs">Non è più possibile modificare le scelte.</p>
+                        </div>
+                    ) : isBookingClosed && !user.isAdmin ? (
+                        <div className="bg-red-100 p-3 rounded-lg text-center border border-red-300">
+                            <span className="text-red-800 font-bold text-lg">🛑 Ordini Chiusi</span>
+                            <p className="text-red-700 text-xs">Le prenotazioni chiudono alle 12:00.</p>
+                        </div>
+                    ) : orders.some(o => o.userId === actingAsUser?.id) ? (
+                        <div className="flex items-center justify-between bg-green-50 p-2 rounded border border-green-200">
+                            <div>
+                                <span className="text-green-800 font-bold text-sm block">Ordine Salvato!</span>
+                                <span className="text-green-600 text-xs truncate max-w-[150px] inline-block">{dishName}</span>
+                                {user.isAdmin && actingAsUser?.id !== user.id && <span className="text-[10px] text-orange-600 block">(per {actingAsUser.name})</span>}
+                            </div>
+                            <button onClick={cancelOrder} className="text-xs text-red-600 underline hover:text-red-800 font-bold px-2 py-1 rounded hover:bg-red-50">Cancella</button>
+                        </div>
+                        ) : (
+                        <button 
+                            onClick={placeOrder} 
+                            disabled={!actingAsUser || !dishName || !selectedWater || !diningChoice}
+                            className={`w-full text-white py-3 rounded-lg font-bold shadow-lg transform transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed ${user.isAdmin && actingAsUser?.id !== user.id ? 'bg-orange-600 hover:bg-orange-700' : 'bg-green-700 hover:bg-green-800'}`}
+                        >
+                            <span>{user.isAdmin && actingAsUser?.id !== user.id ? `📨 Ordina per ${actingAsUser.name.split(' ')[0]}` : '📨 Salva la tua scelta'}</span>
+                        </button>
+                        )}
+                        {message && orderStatus !== 'sent' && !isBookingClosed && <p className={`text-center font-bold mt-2 text-sm animate-pulse ${message.includes('Errore') || message.includes('evidenziati') ? 'text-red-600' : 'text-green-600'}`}>{message}</p>}
+                    </div>
                 </div>
-            </div>
-        </div>
-    );
-};
-
-// --- APP ---
-const App = () => {
-    // Definizione di tutte le variabili di stato e costanti prima di qualsiasi logica
-    const [db, setDb] = useState(null);
-    const [auth, setAuth] = useState(null);
-    const [user, setUser] = useState(null);
-    const [loading, setLoading] = useState(true);
-    
-    const todayDate = new Date();
-    const todayStr = formatDate(todayDate);
-    const [time, setTime] = useState(new Date());
-
-    const [activeDates, setActiveDates] = useState(generateAllowedDates());
-    const [settings, setSettings] = useState(INITIAL_SETTINGS);
-    const [orders, setOrders] = useState([]);
-    const [orderStatus, setOrderStatus] = useState('open');
-    const [adminOverride, setAdminOverride] = useState(false);
-    const [orderAuthor, setOrderAuthor] = useState('');
-
-    const [actingAsUser, setActingAsUser] = useState(null);
-    const [dish, setDish] = useState('');
-    const [water, setWater] = useState('');
-    const [type, setType] = useState('');
-    const [message, setMessage] = useState('');
-    
-    const [showAdmin, setShowAdmin] = useState(false);
-    const [showHistory, setShowHistory] = useState(false);
-    const [showHelp, setShowHelp] = useState(false);
-    const [showUserStats, setShowUserStats] = useState(false); 
-
-    // LOGICA ORARIA E STATO (Calcolata dopo gli stati)
-    useEffect(() => { const t = setInterval(() => setTime(new Date()), 1000); return () => clearInterval(t); }, []);
-    
-    const hour = time.getHours();
-    const minute = time.getMinutes();
-    const currentTime = hour * 60 + minute;
-    
-    const time1030 = 10 * 60 + 30; // 10:30
-    const time1200 = 12 * 60;      // 12:00
-    const time1300 = 13 * 60;      // 13:00
-
-    const isTodayAllowed = activeDates.includes(todayStr) || adminOverride;
-    const isLateWarning = !adminOverride && isTodayAllowed && (currentTime >= time1030 && currentTime < time1200); // 10:30 - 11:59
-    const isBookingClosed = !adminOverride && (currentTime >= time1200); // Blocco Modulo Ordini (12:00+)
-    const isEmailClosed = !adminOverride && (currentTime >= time1300);  // Blocco Email Totale (13:00+)
-    const isClosedView = !isTodayAllowed; // Giorno non lavorativo
-    
-    const forceStart = () => { setLoading(false); setDataLoaded(true); console.warn("Avvio forzato."); };
-
-    // 1. INIT FIREBASE & LOAD DATA
-    useEffect(() => {
-        if (Object.keys(firebaseConfig).length === 0) { setLoading(false); return; }
-        const timeoutId = setTimeout(() => { forceStart(); }, 7000);
-        try {
-            const app = initializeApp(firebaseConfig);
-            const authInstance = getAuth(app);
-            const dbInstance = getFirestore(app);
-            setDb(dbInstance);
-            setAuth(authInstance);
-            
-            const subscribeToData = () => {
-                onSnapshot(doc(dbInstance, SETTINGS_DOC_PATH, 'main'), (snap) => { if (snap.exists()) setSettings(snap.data()); }, (err) => console.error(err));
-                onSnapshot(doc(dbInstance, HOLIDAYS_DOC_PATH), (snap) => { if (snap.exists()) setActiveDates(snap.data().activeDates || generateAllowedDates()); else setDoc(doc(dbInstance, HOLIDAYS_DOC_PATH), { activeDates: generateAllowedDates() }, { merge: true }).catch(console.error); }, (err) => console.error(err));
-                onSnapshot(doc(dbInstance, CONFIG_DOC_PATH, 'override'), (snap) => { if (snap.exists()) setAdminOverride(snap.data().isOverride || false); }, (err) => console.error(err));
-            };
-            
-            const initAuth = async () => { if (!authInstance.currentUser) { if (initialAuthToken) await signInWithCustomToken(authInstance, initialAuthToken).catch(() => signInAnonymously(authInstance)); else await signInAnonymously(authInstance); } };
-            
-            initAuth().then(() => { subscribeToData(); setDataLoaded(true); });
-            onAuthStateChanged(authInstance, (u) => { if (u) { setLoading(false); clearTimeout(timeoutId); setIsAuthReady(true); } });
-            return () => clearTimeout(timeoutId);
-        } catch (e) { console.error("Errore init:", e); setLoading(false); }
-    }, []);
-
-    // Restore user session (dopo il caricamento)
-    useEffect(() => {
-        if (user || !dataLoaded || !COLLEAGUES_LIST.length) return;
-        const savedUserId = sessionStorage.getItem('mealUser');
-        if (savedUserId) { 
-            const found = COLLEAGUES_LIST.find(c => c.id === savedUserId); 
-            if (found) { setUser(found); setActingAsUser(found); }
-        }
-    }, [dataLoaded, user]);
-
-    // LISTENER ORDINI
-    useEffect(() => {
-        if (!db || !auth || !auth.currentUser) return;
-        const docRef = doc(db, PUBLIC_ORDERS_COLLECTION, todayStr);
-        const unsubscribe = onSnapshot(docRef, (docSnap) => {
-            if (docSnap.exists()) {
-                const data = docSnap.data();
-                setOrders(data.orders || []);
-                setOrderStatus(data.status || 'open');
-                setOrderAuthor(data.confirmedBy || '');
-                if (actingAsUser) {
-                    const existingOrder = (data.orders || []).find(o => o.userId === actingAsUser.id);
-                    if (existingOrder) { setDish(existingOrder.itemName || ''); setWater(existingOrder.waterChoice || ''); setType(existingOrder.isTakeout ? 'asporto' : 'bar'); }
-                    else { setDish(''); setWater(''); setType(''); }
-                }
-            } else { setOrders([]); setOrderStatus('open'); setOrderAuthor(''); }
-        }, (err) => { console.error("Errore listener ordini:", err); });
-        return () => unsubscribe();
-    }, [db, auth, actingAsUser, todayStr]);
-
-
-    // --- HANDLERS DI BASE ---
-
-    const handleLogin = (colleague) => { setUser(colleague); setActingAsUser(colleague); sessionStorage.setItem('mealUser', colleague.id); };
-    
-    // Funzione handleLogout (era mancante nella visibilità precedente)
-    const handleLogout = () => { 
-        setUser(null); setActingAsUser(null); 
-        sessionStorage.removeItem('mealAppUser'); 
-        setDish(''); setWater(''); setType(''); 
-    };
-
-    const handleAdminUserChange = (e) => { const targetId = e.target.value; const targetUser = COLLEAGUES_LIST.find(c => c.id === targetId); if (targetUser) { setActingAsUser(targetUser); setMessage(''); } };
-    const adminEditOrder = (targetUserId) => { const targetUser = COLLEAGUES_LIST.find(c => c.id === targetUserId); if (targetUser) setActingAsUser(targetUser); };
-    const adminDeleteOrder = async (targetUserId) => { if (!confirm("Sei sicuro di voler eliminare questo ordine?")) return; try { const orderRef = doc(db, PUBLIC_ORDERS_COLLECTION, todayStr); await updateDoc(orderRef, { orders: orders.filter(o => o.userId !== targetUserId) }); } catch (e) { console.error(e); } };
-
-    const placeOrder = async () => {
-        if (orderStatus === 'sent' && !user.isAdmin) { alert("Ordine già inviato al bar! Non puoi modificare."); return; }
-        if (!isTodayAllowed && !user.isAdmin) { alert("Oggi il servizio è chiuso e non puoi ordinare."); return; }
-        if (isBookingClosed && !user.isAdmin) { alert("Troppo tardi! Sono passate le 12:00. Solo l'admin può modificare."); return; }
-        const newErrors = {}; let hasError = false;
-        if (!dish || dish.trim() === '') { newErrors.dishName = true; hasError = true; }
-        if (!water) { newErrors.water = true; hasError = true; }
-        if (!type) { newErrors.dining = true; hasError = true; }
-        setErrors(newErrors);
-        if (hasError) { setTimeout(() => alert("⚠️ Compila tutti i campi evidenziati in rosso!"), 100); return; }
-        const orderRef = doc(db, PUBLIC_ORDERS_COLLECTION, todayStr);
-        const cleanDishName = dish.charAt(0).toUpperCase() + dish.slice(1);
-        const newOrder = { userId: actingAsUser.id, userName: actingAsUser.name, itemName: cleanDishName, waterChoice: water, isTakeout: type === 'asporto', timestamp: Date.now(), };
-        try { await setDoc(orderRef, { mealDate: todayStr }, { merge: true }); const updatedOrders = orders.filter(o => o.userId !== actingAsUser.id).concat([newOrder]); await updateDoc(orderRef, { orders: updatedOrders }); if (user.id === actingAsUser.id) { setMessage("Ordine salvato! Ricordati di inviare se sei l'ultimo."); } else { setMessage(`Ordine salvato per ${actingAsUser.name}!`); } setErrors({}); } catch (e) { console.error(e); setMessage("Errore invio ordine"); }
-    };
-
-    const cancelOrder = async () => { if (orderStatus === 'sent' && !user.isAdmin) { alert("Ordine già inviato al bar! Non puoi cancellare."); return; } try { const orderRef = doc(db, PUBLIC_ORDERS_COLLECTION, todayStr); await updateDoc(orderRef, { orders: orders.filter(o => o.userId !== actingAsUser.id) }); setDish(''); setWater(''); setType(''); setMessage("Ordine annullato 🗑️"); } catch (e) { console.error(e); } };
-    const markSent = async () => { if (!confirm("Confermi INVIO?")) return; await setDoc(doc(db, PUBLIC_ORDERS_COLLECTION, todayStr), { status: 'sent', confirmedBy: user.name }, { merge: true }); };
-    const unlockDay = async () => { if (!confirm("Riaprire?")) return; await setDoc(doc(db, CONFIG_DOC_PATH, 'override'), { isOverride: false }, { merge: true }); await setDoc(doc(db, PUBLIC_ORDERS_COLLECTION, todayStr), { status: 'open', confirmedBy: '' }, { merge: true }); };
-
-    // --- UTILITY MAIL ---
-    const getAllEmails = () => COLLEAGUES_LIST.map(c => c.email).filter(email => email && email.includes('@')).join(',');
-
-    const generateMail = () => {
-        const groupedDishes = orders.reduce((acc, o) => { const key = o.itemName.trim(); acc[key] = (acc[key] || 0) + 1; return acc; }, {});
-        const water = orders.reduce((acc, o) => { const w = o.waterChoice || 'Nessuna'; acc[w] = (acc[w] || 0) + 1; return acc; }, {});
-        let text = `Ciao Laura,\n`;
-        text += `ecco il riepilogo dell'ordine di oggi ${todayDate.toLocaleDateString('it-IT')}.\n`;
-        text += `Ti segnalo gentilmente che gli ordini DA ASPORTO 🥡 e da consumare AL BAR ☕ sono tutti per le ore 13:30.\n`;
-        text += `Grazie come sempre per la disponibilità!\nA dopo\n\n`;
-        text += `=========================================\n`;
-        text += `RIEPILOGO ORDINE DEL ${todayDate.toLocaleDateString('it-IT')}\n`;
-        text += `TOTALE ORDINI: ${orders.length}\n`;
-        text += `=========================================\n`;
-        text += "\n--- 🍽️ PIATTI ---\n";
-        Object.entries(groupedDishes).forEach(([name, count]) => { text += `${count}x 🥗 ${name}\n`; });
-        text += "\n--- 💧 ACQUA ---\n";
-        if (water['Naturale']) text += `${water['Naturale']}x 💧 Naturale\n`;
-        if (water['Frizzante']) text += `${water['Frizzante']}x 🫧 Frizzante\n`;
-        const sortedOrders = [...orders].sort((a, b) => a.userName.localeCompare(b.userName));
-        const barOrders = sortedOrders.filter(o => !o.isTakeout);
-        const takeoutOrders = sortedOrders.filter(o => o.isTakeout);
-        text += "\n--- ☕ AL BAR ---\n";
-        if (barOrders.length === 0) text += "Nessun ordine al bar.\n";
-        barOrders.forEach((o, i) => { text += `${i + 1}. ${o.userName}: 🥗 ${o.itemName}${o.waterChoice && o.waterChoice !== 'Nessuna' ? ` [${o.waterChoice}]` : ''}\n`; });
-        text += "\n--- 🥡 DA ASPORTO ---\n";
-        if (takeoutOrders.length === 0) text += "Nessun ordine da asporto.\n";
-        takeoutOrders.forEach((o, i) => { text += `${i + 1}. ${o.userName}: 🥗 ${o.itemName}${o.waterChoice && o.waterChoice !== 'Nessuna' ? ` [${o.waterChoice}]` : ''}\n`; });
-        return text;
-    };
-
-    const openGmail = () => {
-        const subject = encodeURIComponent(`Ordine Pranzo Ufficio - ${todayStr}`);
-        const body = encodeURIComponent(generateMail());
-        window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${settings.emailBar}&cc=${getAllEmails()}&su=${subject}&body=${body}`, '_blank');
-    };
-    
-    const openDefaultMail = () => {
-        const subject = encodeURIComponent(`Ordine Pranzo Ufficio - ${todayStr}`);
-        window.location.href = `mailto:${settings.emailBar}?cc=${getAllEmails()}&subject=${subject}&body=${generateMail()}`;
-    };
-
-    const openLateEmail = () => {
-        const subject = encodeURIComponent(`Ordine Personale Tardivo - ${todayStr}`);
-        const body = encodeURIComponent(`Ciao, sono ${user.name}.\nVorrei ordinare per oggi:\n\n- [SCRIVI QUI IL PIATTO]\n\nGrazie!`);
-        window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${settings.emailBar}&su=${subject}&body=${body}`, '_blank');
-    };
-
-
-    if(loading) return <LoadingSpinner />;
-    if(!user) return <LoginScreen onLogin={handleLogin} colleagues={COLLEAGUES_LIST} />;
-
-    const sortedOrders = [...orders].sort((a,b) => a.userName.localeCompare(b.userName));
-
-    return (
-        <div className="min-h-screen bg-gray-100 pb-20 font-sans text-gray-800">
-            
-            {/* HEADER */}
-            <div className="relative h-48 bg-gray-900 overflow-hidden shadow-lg">
-                 <div className="absolute inset-0 bg-cover bg-center opacity-60" style={{ backgroundImage: `url(${BANNER_IMAGE_URL})` }}></div>
-                 <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-transparent to-transparent"></div>
-                 <div className="relative z-10 p-6 flex justify-between items-end h-full">
-                     <div>
-                         <div className="bg-white text-green-800 text-xs font-bold px-2 py-1 rounded mb-2 inline-block shadow">TEL. {settings.phoneBar}</div>
-                         <h1 className="text-4xl font-extrabold text-white font-serif tracking-wide drop-shadow-md">7 MILA CAFFÈ</h1>
-                     </div>
-                     <div className="text-right hidden sm:block">
-                         <p className="text-gray-200 italic font-serif text-lg border-l-2 border-green-500 pl-3">"Il pranzo è sacro."</p>
-                     </div>
-                 </div>
+            )}
             </div>
 
-            {/* STATUS BAR */}
-            <div className="bg-gray-800 text-white px-4 py-3 shadow-md flex justify-between items-center text-sm border-b border-gray-700 sticky top-0 z-40">
-                 <div className="font-medium text-gray-300">Data: <span className="text-white font-bold">{todayDate.toLocaleDateString('it-IT')}</span></div>
-                 <div className="flex items-center gap-3">
-                      <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full ${orderStatus!=='sent'?'bg-gray-600 text-white':'text-gray-500'}`}><span className="bg-white text-black rounded-full w-4 h-4 flex items-center justify-center text-[10px] font-bold">1</span> Raccolta</div>
-                      <div className="w-4 h-0.5 bg-gray-600"></div>
-                      <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full ${orderStatus==='sent'?'bg-green-600 text-white':'text-gray-500'}`}><span className="bg-white text-black rounded-full w-4 h-4 flex items-center justify-center text-[10px] font-bold">2</span> Inviato</div>
-                 </div>
-                 <div className="flex items-center gap-2 font-mono font-bold">
-                     {isLateWarning && <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>}
-                     {isEmailClosed && <span className="w-2 h-2 bg-red-600 rounded-full"></span>}
-                     {time.toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'})}
-                 </div>
+            {/* RIGHT: Riepilogo e Admin */}
+            <div className="lg:col-span-4 space-y-6">
+            
+            {/* Box Admin / Invio */}
+            <div className="bg-slate-100 p-4 rounded-lg border border-slate-300 shadow-sm">
+              <h3 className="font-bold text-slate-700 mb-4 text-sm uppercase flex items-center gap-2">
+                <span>🚀</span> Zona Invio
+              </h3>
+              
+              {/* SE CHIUSO/SCADUTO MA NON INVIATO: MOSTRA BOTTONI EMERGENZA */}
+              {isClosedView ? (
+                  <div className="space-y-3">
+                      <div className="bg-red-50 border border-red-200 p-3 rounded text-center">
+                          <p className="text-red-700 font-bold text-sm mb-1">⛔ SERVIZIO ORDINI CHIUSO</p>
+                          <p className="text-xs text-gray-600">L'app riapre il prossimo giorno utile: {nextOpenDay}</p>
+                      </div>
+                      <a href={`tel:${appSettings.phoneBar}`} className="block w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded text-center shadow-md transition-colors">
+                          📞 CHIAMA IL BAR
+                      </a>
+                  </div>
+              ) : (isEmailClosed && orderStatus !== 'sent') ? (
+                  <div className="space-y-3">
+                      <div className="bg-red-50 border border-red-200 p-3 rounded text-center">
+                          <p className="text-red-700 font-bold text-sm mb-1">⛔ TEMPO SCADUTO / CHIUSO</p>
+                          <p className="text-xs text-gray-600">Non è possibile inviare l'ordine di gruppo.</p>
+                      </div>
+                      
+                      <a href={`tel:${appSettings.phoneBar}`} className="block w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded text-center shadow-md transition-colors">
+                          📞 CHIAMA IL BAR
+                      </a>
+                      
+                      <button onClick={openLateEmail} className="block w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded text-center shadow-md transition-colors">
+                          ✉️ MAIL DIRETTA (Personale)
+                      </button>
+                      <p className="text-[10px] text-gray-500 text-center mt-1">Apre la tua mail solo verso il bar (no colleghi in copia).</p>
+
+                      {/* ADMIN OVERRIDE */}
+                      {user.isAdmin && (
+                          <div className="pt-4 mt-4 border-t border-gray-300">
+                              <p className="text-xs font-bold text-orange-600 mb-2 text-center">🛠️ Admin Override</p>
+                               <button onClick={markAsSent} className="w-full py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold rounded text-xs mb-2">
+                                   Forza stato "INVIATO"
+                               </button>
+                          </div>
+                      )}
+                  </div>
+              ) : orderStatus === 'sent' ? (
+                  <div className="text-center p-4 bg-white rounded border border-green-200">
+                      <div className="text-4xl mb-2">✅</div>
+                      <p className="text-green-800 font-bold">Email Inviata da {orderAuthor || 'un collega'}</p>
+                      <p className="text-xs text-gray-500">L'ordine è chiuso.</p>
+                      {user.isAdmin && (
+                          <button onClick={unlockOrder} className="mt-3 text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-1 rounded border border-gray-400">
+                              🔓 Sblocca Ordine (Solo Admin)
+                          </button>
+                      )}
+                    </div>
+                ) : (
+                  <div className="space-y-4">
+                      {/* FASE 1 */}
+                      <div className="relative border-l-2 border-blue-400 pl-4 ml-2">
+                          <div className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-blue-500 border-2 border-white"></div>
+                          <h4 className="text-sm font-bold text-blue-800 mb-1">Fase 1: Invia l'Email</h4>
+                          <p className="text-xs text-slate-500 mb-2">Apri il tuo programma di posta. Il testo è già pronto.</p>
+                          <div className="grid gap-2">
+                              <button onClick={openGmail} className="w-full border py-2 rounded font-bold shadow-sm flex items-center justify-center gap-2 text-sm bg-white border-red-200 text-red-700 hover:bg-red-50">
+                                  <span className="text-lg">🔴</span> Gmail Web (PC)
+                              </button>
+                              <button onClick={openDefaultMail} className="w-full border py-2 rounded font-bold shadow-sm flex items-center justify-center gap-2 text-sm bg-white border-slate-300 text-slate-700 hover:bg-slate-50">
+                                  <span className="text-lg">📱</span> App Email (Mobile)
+                              </button>
+                          </div>
+                      </div>
+
+                      {/* FASE 2 */}
+                      <div className="relative border-l-2 border-green-400 pl-4 ml-2">
+                          <div className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-green-500 border-2 border-white"></div>
+                          <h4 className="text-sm font-bold text-green-800 mb-1">Fase 2: Conferma nel sistema</h4>
+                          <p className="text-xs text-slate-500 mb-2">Solo DOPO aver inviato l'email reale, clicca qui per chiudere l'ordine.</p>
+                          <button onClick={markAsSent} disabled={orders.length === 0} className="w-full py-3 rounded font-bold shadow flex items-center justify-center gap-2 text-sm bg-green-600 hover:bg-green-700 text-white animate-pulse disabled:opacity-50">
+                              <span>✅</span> CONFERMA INVIO
+                          </button>
+                      </div>
+                  </div>
+                )}
             </div>
 
-            {/* NAVBAR */}
-            <div className="bg-white shadow-sm p-2 flex justify-between items-center px-4">
-                <div className="font-bold text-green-800">Ciao, <span className="text-black">{user.name.split(' ')[0]}</span></div>
-                <div className="flex gap-2">
-                     {user.isAdmin && <button onClick={()=>setShowAdmin(true)} className="bg-orange-500 text-white px-3 py-1 rounded text-xs font-bold shadow hover:bg-orange-600">⚙️ Admin</button>}
-                     <button onClick={()=>setShowHistory(true)} className="bg-purple-600 text-white px-3 py-1 rounded text-xs font-bold shadow hover:bg-purple-700">📜 Storico</button>
-                     <button onClick={()=>setShowHelp(true)} className="bg-blue-600 text-white px-3 py-1 rounded text-xs font-bold shadow hover:bg-blue-700">ℹ️ Guida</button>
-                     <button onClick={handleLogout} className="border border-gray-300 text-gray-600 px-3 py-1 rounded text-xs font-bold hover:bg-gray-50">Esci</button>
-                </div>
-            </div>
-
-            {showAdmin && <AdminPanel db={db} onClose={()=>setShowAdmin(false)} colleaguesList={COLLEAGUES_LIST} adminOverride={adminOverride} onToggleForceOpen={(v)=>setDoc(doc(db, CONFIG_DOC_PATH, 'override'), {isOverride:v})} todayStr={todayStr} adminName={user.name} />}
-            {showHistory && <AdminHistory db={db} onClose={()=>setShowHistory(false)} user={user} />}
-            {showHelp && <HelpModal onClose={()=>setShowHelp(false)} />}
-            {showUserStats && <UserStatsModal db={db} user={user} onClose={()=>setShowUserStats(false)} />}
-
-            <div className="max-w-6xl mx-auto p-4 grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <div className="bg-white p-4 rounded-xl shadow border h-full max-h-[600px] overflow-y-auto">
+              <h3 className="font-bold text-gray-800 border-b pb-2 mb-2 flex justify-between items-center">
+                <span>👀 Riepilogo Ordini</span>
+                <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{orders.length}</span>
+              </h3>
+              
+              <div className="space-y-6">
                 
-                {/* SINISTRA: MODULO */}
-                <div className="lg:col-span-7 space-y-4">
-                    {isClosedView ? (
-                        <ClosedScreen nextDate={getNextOpenDay(todayStr, activeDates)} />
-                    ) : (
-                        <div className="bg-white p-6 rounded-2xl shadow-lg border-l-4 border-green-600">
-                             {/* INTESTAZIONE MODULO */}
-                             <div className="mb-6 pb-4 border-b flex justify-between items-center">
-                                 <h3 className="text-xl font-bold text-gray-800">Ordina il tuo pranzo</h3>
-                                 {user.isAdmin && user.id !== actingAsUser.id && (
-                                     <div className="bg-yellow-100 text-yellow-800 text-xs px-3 py-1 rounded-full font-bold">
-                                         Stai ordinando per: {actingAsUser.name}
-                                         <button onClick={()=>setActingAsUser(user)} className="ml-2 underline">X</button>
-                                     </div>
-                                 )}
-                             </div>
-                             
-                             {isBookingClosed ? (
-                                 <div className="bg-red-50 border border-red-200 p-6 rounded-xl text-center">
-                                     <div className="text-3xl mb-2">🛑</div>
-                                     <h3 className="text-red-800 font-bold text-lg">ORDINI CHIUSI (12:00)</h3>
-                                     <p className="text-red-600 text-sm">Il tempo per ordinare è scaduto.</p>
-                                 </div>
-                             ) : (
-                                 <>
-                                     <div className="mb-6">
-                                         <label className="block text-gray-500 text-xs font-bold uppercase mb-2">1. COSA MANGI?</label>
-                                         <input className="w-full border-2 border-gray-200 p-4 rounded-xl text-lg font-bold text-gray-700 focus:border-green-500 focus:ring-2 focus:ring-green-100 outline-none transition-all" placeholder="Es. Pasta al pomodoro..." value={dish} onChange={e=>setDish(e.target.value)} />
-                                     </div>
-
-                                     <div className="grid grid-cols-2 gap-4 mb-6">
-                                         <div>
-                                             <label className="block text-gray-500 text-xs font-bold uppercase mb-2">2. ACQUA</label>
-                                             <div className="flex flex-col gap-2 h-full">
-                                                 {['Naturale','Frizzante','Nessuna'].map(w => (
-                                                     <div key={w} className="flex-1"><WaterIcon type={w} selected={water===w} onClick={()=>setWater(w)} /></div>
-                                                 ))}
-                                             </div>
-                                         </div>
-                                         <div>
-                                             <label className="block text-gray-500 text-xs font-bold uppercase mb-2">3. DOVE</label>
-                                             <div className="flex flex-col gap-2 h-full">
-                                                {['bar','asporto'].map(t => (
-                                                    <div key={t} className="flex-1"><TypeBtn type={t} active={type===t} onClick={()=>setType(t)} /></div>
-                                                ))}
-                                             </div>
-                                         </div>
-                                     </div>
-
-                                     <div className="pt-4 border-t">
-                                         {orders.find(o=>o.userId===actingAsUser.id) ? (
-                                             <div className="flex items-center justify-between bg-green-50 p-4 rounded-xl border border-green-200">
-                                                 <div>
-                                                     <span className="text-green-800 font-bold block">✅ Ordine Salvato</span>
-                                                     <span className="text-green-600 text-xs">{dish}</span>
-                                                 </div>
-                                                 <button onClick={deleteMyOrder} className="bg-white text-red-500 border border-red-200 px-4 py-2 rounded-lg text-sm font-bold hover:bg-red-50">Cancella</button>
-                                             </div>
-                                         ) : (
-                                             <button onClick={saveOrder} className="w-full bg-gradient-to-r from-green-600 to-green-500 text-white py-4 rounded-xl font-bold text-lg shadow-lg hover:shadow-xl transform transition active:scale-95">
-                                                 SALVA SCELTA
-                                             </button>
-                                         )}
-                                         {message && <p className="text-center text-green-600 font-bold mt-3 text-sm animate-fade-in-up">{message}</p>}
-                                     </div>
-                                 </>
-                             )}
-                        </div>
-                    )}
-                </div>
-
-                {/* DESTRA: INVIO */}
-                <div className="lg:col-span-5 space-y-6">
-                    
-                    <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-100 relative overflow-hidden">
-                         <div className="absolute top-0 left-0 w-1 h-full bg-blue-500"></div>
-                         <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><span className="text-xl">🚀</span> ZONA INVIO</h3>
-                         
-                         {isEmailClosed && !isClosedView ? (
-                             <div className="space-y-3 text-center">
-                                 <div className="bg-red-50 text-red-800 p-3 rounded-lg border border-red-200 font-bold text-sm">🛑 EMAIL CHIUSA (13:00)</div>
-                                 <p className="text-xs text-gray-500">È troppo tardi per l'email. Chiama direttamente.</p>
-                                 <a href={`tel:${settings.phoneBar}`} className="block w-full bg-green-600 text-white font-bold py-3 rounded-xl shadow hover:bg-green-700 transition-colors">📞 CHIAMA BAR</a>
-                                 {user.isAdmin && <button onClick={markSent} className="text-xs text-gray-400 underline mt-2">Admin: Forza stato Inviato</button>}
-                             </div>
-                         ) : (isClosedView && !adminOverride) ? (
-                             <div className="space-y-3 text-center">
-                                 <p className="text-sm text-gray-500 italic">Oggi il servizio è chiuso.</p>
-                                 <button onClick={openLateEmail} className="block w-full bg-blue-600 text-white font-bold py-3 rounded-xl shadow hover:bg-blue-700 transition-colors">✉️ MAIL PERSONALE</button>
-                                 <p className="text-[10px] text-gray-400">Invia una mail a tuo nome (senza CC).</p>
-                             </div>
-                         ) : (
-                             <div className="space-y-3">
-                                 {isLateWarning && (
-                                    <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-3 rounded text-sm font-bold animate-pulse flex items-center gap-2">
-                                        <span>⏰</span> È TARDI! (10:30+) - INVIA ORA
-                                    </div>
-                                 )}
-                                 
-                                 {orderStatus === 'sent' ? (
-                                     <div className="bg-green-50 border border-green-200 p-4 rounded-xl text-center">
-                                         <div className="text-3xl mb-2">✅</div>
-                                         <p className="text-green-800 font-bold">ORDINE INVIATO</p>
-                                         <p className="text-green-600 text-xs">Confermato da {orderAuthor}</p>
-                                         {user.isAdmin && <button onClick={unlockDay} className="mt-3 text-xs text-gray-400 underline">🔓 Sblocca (Admin)</button>}
-                                     </div>
-                                 ) : (
-                                     <>
-                                        <p className="text-xs text-gray-500 mb-2">Se sei l'ultimo, invia l'email e poi conferma.</p>
-                                        <div className="grid grid-cols-2 gap-2">
-                                            <button onClick={openGmail} className="bg-white border-2 border-red-100 text-red-600 py-2 rounded-lg font-bold text-xs hover:bg-red-50 transition-colors flex flex-col items-center justify-center gap-1">
-                                                <span className="text-lg">🔴</span> Gmail Web
-                                            </button>
-                                            <button onClick={openDefaultMail} className="bg-white border-2 border-gray-100 text-gray-600 py-2 rounded-lg font-bold text-xs hover:bg-gray-50 transition-colors flex flex-col items-center justify-center gap-1">
-                                                <span className="text-lg">📱</span> App Email
-                                            </button>
-                                        </div>
-                                        <button onClick={markSent} className="w-full bg-green-600 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-green-700 transition-transform active:scale-95 flex items-center justify-center gap-2 mt-2">
-                                            <span>✅</span> CONFERMA INVIO
-                                        </button>
-                                     </>
-                                 )}
-                             </div>
-                         )}
-                    </div>
-
-                    <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-100 relative overflow-hidden">
-                        <div className="absolute top-0 left-0 w-1 h-full bg-purple-500"></div>
-                        <div className="flex justify-between items-center mb-4 border-b pb-2">
-                            <h3 className="font-bold text-gray-800 flex items-center gap-2"><span className="text-xl">👀</span> RIEPILOGO</h3>
-                            <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded-full text-xs font-bold">{orders.length} Ordini</span>
-                        </div>
-                        
-                        <div className="overflow-y-auto max-h-[400px] pr-1 custom-scrollbar">
-                            {sortedOrders.length === 0 ? (
-                                <p className="text-center text-gray-400 italic py-8">Nessun ordine inserito oggi.</p>
-                            ) : (
-                                <div className="space-y-3">
-                                    {sortedOrders.map((o, i) => (
-                                        <div key={o.userId} className="bg-gray-50 p-3 rounded-lg border border-gray-100 flex justify-between items-start group hover:border-purple-200 transition-colors">
-                                            <div>
-                                                <span className="font-bold text-gray-800 block text-sm">{o.userName}</span>
-                                                <span className="text-gray-600 text-xs block mt-0.5">{o.itemName}</span>
-                                                {o.waterChoice && o.waterChoice !== 'Nessuna' && <span className="text-[10px] text-blue-500 mt-1 inline-block bg-blue-50 px-1.5 rounded">{o.waterChoice}</span>}
-                                            </div>
-                                            <div className="flex flex-col items-end gap-1">
-                                                <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${o.isTakeout?'bg-red-100 text-red-600':'bg-orange-100 text-orange-600'}`}>{o.isTakeout?'ASPORTO':'BAR'}</span>
-                                                {user.isAdmin && <button onClick={()=>adminDeleteOrder(o.userId)} className="text-red-400 hover:text-red-600 text-xs font-bold opacity-0 group-hover:opacity-100 transition-opacity px-1">🗑️</button>}
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
+                {/* SEZIONE BAR */}
+                {barOrders.length > 0 && (
+                  <div>
+                    <h4 className="text-orange-700 font-bold border-b-2 border-orange-200 mb-2 pb-1 sticky top-0 bg-white z-10 flex items-center gap-2 text-sm">
+                        ☕ AL BAR <span className="bg-orange-100 text-xs px-2 rounded-full">{barOrders.length}</span>
+                    </h4>
+                    <div className="space-y-2">
+                      {barOrders.map((order, i) => (
+                          <div key={order.userId} className="text-sm flex justify-between items-center p-2 rounded hover:bg-gray-50 border border-transparent hover:border-gray-200 group relative">
+                            <div className="flex items-center gap-2 overflow-hidden w-full">
+                              <span className="text-gray-400 font-mono text-xs w-4">{i+1}.</span>
+                              <span className="font-bold text-gray-700 whitespace-nowrap">{order.userName}</span>
+                              <span className="text-gray-600 truncate text-xs flex-1">- 🥗 {order.itemName}</span>
+                              {user.isAdmin && (
+                                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                      <button onClick={() => adminEditOrder(order.userId)} className="text-xs bg-blue-100 text-blue-600 p-1 rounded hover:bg-blue-200" title="Modifica">✏️</button>
+                                      <button onClick={() => adminDeleteOrder(order.userId)} className="text-xs bg-red-100 text-red-600 p-1 rounded hover:bg-red-200" title="Elimina">🗑️</button>
+                                  </div>
+                              )}
+                            </div>
+                            {order.waterChoice && order.waterChoice !== 'Nessuna' && (
+                               <span className="text-xs text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100 ml-2">
+                                  {order.waterChoice === 'Naturale' ? '💧' : '🫧'}
+                               </span>
                             )}
-                        </div>
+                          </div>
+                      ))}
                     </div>
+                  </div>
+                )}
 
-                </div>
+                {/* SEZIONE ASPORTO */}
+                {takeoutOrders.length > 0 && (
+                  <div>
+                    <h4 className="text-red-700 font-bold border-b-2 border-red-200 mb-2 pb-1 sticky top-0 bg-white z-10 flex items-center gap-2 text-sm">
+                        🥡 DA ASPORTO <span className="bg-red-100 text-xs px-2 rounded-full">{takeoutOrders.length}</span>
+                    </h4>
+                    <div className="space-y-2">
+                      {takeoutOrders.map((order, i) => (
+                          <div key={order.userId} className="text-sm flex justify-between items-center p-2 rounded hover:bg-gray-50 border border-transparent hover:border-gray-200 group relative">
+                            <div className="flex items-center gap-2 overflow-hidden w-full">
+                              <span className="text-gray-400 font-mono text-xs w-4">{i+1}.</span>
+                              <span className="font-bold text-gray-700 whitespace-nowrap">{order.userName}</span>
+                              <span className="text-gray-600 truncate text-xs flex-1">- 🥗 {order.itemName}</span>
+                              {user.isAdmin && (
+                                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                      <button onClick={() => adminEditOrder(order.userId)} className="text-xs bg-blue-100 text-blue-600 p-1 rounded hover:bg-blue-200" title="Modifica">✏️</button>
+                                      <button onClick={() => adminDeleteOrder(order.userId)} className="text-xs bg-red-100 text-red-600 p-1 rounded hover:bg-red-200" title="Elimina">🗑️</button>
+                                  </div>
+                              )}
+                            </div>
+                            {order.waterChoice && order.waterChoice !== 'Nessuna' && (
+                               <span className="text-xs text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100 ml-2">
+                                  {order.waterChoice === 'Naturale' ? '💧' : '🫧'}
+                               </span>
+                            )}
+                          </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {orders.length === 0 && <p className="text-gray-400 italic text-sm text-center py-4">Nessun ordine ancora.</p>}
+              </div>
             </div>
-        </div>
-    );
+
+          </div>
+        </main>
+      </div>
+    </div>
+  );
 };
 
 export default App;
