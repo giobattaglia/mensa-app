@@ -1174,7 +1174,7 @@ const App = () => {
 
         {/* BANNER */}
         <header 
-          className="relative text-white overflow-hidden border-b-4 border-green-800 bg-cover bg-center"
+          className="relative text-white overflow-hidden border-b-4 border-green-800 bg-cover bg-center h-48"
           style={{ 
             backgroundColor: '#15803d',
             backgroundImage: BANNER_IMAGE_URL ? `url(${BANNER_IMAGE_URL})` : 'none' 
