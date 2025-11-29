@@ -373,7 +373,7 @@ const AdminHistory = ({ db, onClose, user }) => {
 };
 
 // --- CALENDARIO ADMIN ---
-const AdminCalendar = ({ activeDates, onToggleDate }) => {
+const AdminCalendar = ({ activeDates, onToggleDate, todayStr }) => {
     const [currentMonth, setCurrentMonth] = useState(new Date());
     const daysInMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0).getDate();
     const firstDay = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1).getDay(); // 0=Sunday, 1=Monday...
@@ -417,7 +417,7 @@ const AdminCalendar = ({ activeDates, onToggleDate }) => {
 };
 
 // --- ADMIN PANEL ---
-const AdminPanel = ({ db, onClose, colleaguesList, adminOverride, onToggleForceOpen }) => {
+const AdminPanel = ({ db, onClose, colleaguesList, adminOverride, onToggleForceOpen, todayStr }) => {
     const [tab, setTab] = useState('cal');
     const [settings, setSettings] = useState(INITIAL_SETTINGS);
     const [activeDates, setActiveDates] = useState(generateAllowedDates());
@@ -500,7 +500,7 @@ const AdminPanel = ({ db, onClose, colleaguesList, adminOverride, onToggleForceO
                             {loadingDates ? <LoadingSpinner text="Caricamento calendario..." /> : (
                                 <div className="max-w-xl mx-auto">
                                     <p className="text-sm text-gray-500 mb-4 text-center">Clicca per aprire (Verde) o chiudere (Grigio) un giorno specifico.</p>
-                                    <AdminCalendar activeDates={activeDates} onToggleDate={handleToggleDate} />
+                                    <AdminCalendar activeDates={activeDates} onToggleDate={handleToggleDate} todayStr={todayStr} />
                                 </div>
                             )}
                         </div>
@@ -1082,7 +1082,7 @@ const App = () => {
 
                         {/* SEZIONE 1: PIATTO */}
                         <div className={`bg-white border-2 p-5 rounded-xl shadow-lg transition-colors ${errors.dishName ? 'border-red-500 ring-4 ring-red-100' : 'border-slate-200'}`}>
-                            {isClosedView ? (
+                            {!isTodayAllowed && !adminOverride ? (
                                 <div className="text-center py-10 text-gray-500">
                                     <h3 className="text-xl font-bold mb-2 text-gray-400">😴 Oggi Riposo</h3>
                                     <p className="text-sm">Oggi il servizio prenotazione è chiuso.</p>
