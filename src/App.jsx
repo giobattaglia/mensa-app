@@ -1124,28 +1124,29 @@ const App = () => {
       <div className={`max-w-5xl mx-auto bg-white shadow-xl rounded-2xl overflow-hidden relative transition-all duration-300`}>
         
         {/* TOP BAR */}
-        <div className="absolute top-4 right-4 z-50 flex flex-wrap justify-end gap-2 max-w-[300px]">
+        {/* CORREZIONE: Forzato a flex-row e overflow-x-auto */}
+        <div className="absolute top-4 right-4 z-50 flex flex-row flex-nowrap overflow-x-auto justify-end gap-2 pr-2">
           {/* NEW BUTTON: MENU MANAGER FOR ALL */}
-          <button onClick={() => setShowMenuManager(true)} className="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold px-3 py-1 rounded-full shadow border border-purple-500 flex items-center gap-1">
+          <button onClick={() => setShowMenuManager(true)} className="flex-shrink-0 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold px-3 py-1 rounded-full shadow border border-purple-500 flex items-center gap-1">
             📝 Menu
           </button>
 
           {user.isAdmin && (
             <>
-              <button onClick={() => setShowAdminPanel(true)} className="bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold px-3 py-1 rounded-full shadow border border-orange-400">
+              <button onClick={() => setShowAdminPanel(true)} className="flex-shrink-0 bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold px-3 py-1 rounded-full shadow border border-orange-400">
                 📅 Gestione
               </button>
             </>
           )}
           
-          <button onClick={() => setShowHistory(true)} className="bg-green-600 hover:bg-green-700 text-white text-xs font-bold px-3 py-1 rounded-full shadow border border-green-500">
+          <button onClick={() => setShowHistory(true)} className="flex-shrink-0 bg-green-600 hover:bg-green-700 text-white text-xs font-bold px-3 py-1 rounded-full shadow border border-green-500">
             📜 Storico
           </button>
           
-          <button onClick={() => setShowHelp(true)} className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-1 rounded-full shadow border border-blue-500 flex items-center gap-1">
+          <button onClick={() => setShowHelp(true)} className="flex-shrink-0 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-1 rounded-full shadow border border-blue-500 flex items-center gap-1">
             <span>ℹ️</span> Guida
           </button>
-          <button onClick={handleLogout} className="bg-white/90 hover:bg-white text-gray-800 text-xs px-3 py-1 rounded-full shadow backdrop-blur-sm border border-gray-200">
+          <button onClick={handleLogout} className="flex-shrink-0 bg-white/90 hover:bg-white text-gray-800 text-xs px-3 py-1 rounded-full shadow backdrop-blur-sm border border-gray-200">
             Esci ({user.name.split(' ')[0]})
           </button>
         </div>
