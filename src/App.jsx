@@ -136,27 +136,33 @@ const HelpModal = ({ onClose }) => (
       <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-2xl font-bold">&times;</button>
       
       <h2 className="text-2xl font-bold text-green-800 mb-4 flex items-center gap-2">
-        ℹ️ Guida all'uso
+        ℹ️ Guida Rapida all'App
       </h2>
 
       <div className="space-y-6">
         <div>
-          <h3 className="font-bold text-gray-800 border-b pb-1 mb-2">1. Come Funziona l'Ordine</h3>
+          <h3 className="font-bold text-gray-800 border-b pb-1 mb-2">1. Funzionamento Principale</h3>
           <ul className="list-disc pl-5 space-y-2 text-sm text-gray-600">
-            <li>Il sistema apre solo il **Lunedì** e **Giovedì**.</li>
-            <li>Se entri in altri giorni, potrai solo consultare lo storico.</li>
-            <li>**Passaggio 1 (Raccolta):** Tutti inseriscono il proprio ordine entro le 11:59.</li>
-            <li>**Passaggio 2 (Invio):** Un solo collega (il primo o l'Admin) invia l'email al Bar.</li>
-            <li>**Passaggio 3 (Conferma):** Chi ha inviato l'email DEVE cliccare "CONFERMA INVIO" per bloccare l'app e salvare l'ordine nello storico.</li>
+            <li>L'app è attiva solo il **Lunedì** e il **Giovedì**. Negli altri giorni, puoi solo vedere lo storico.</li>
+            <li>Chiunque può inserire il proprio ordine in autonomia.</li>
+            <li>**Blocco Totale:** L'ordine si considera chiuso e nello storico solo dopo che è stato inviato via email al Bar e confermato.</li>
           </ul>
         </div>
 
         <div className="bg-red-50 p-4 rounded-lg border border-red-200">
-          <h3 className="font-bold text-red-800 border-b border-red-300 pb-1 mb-2">2. Scadenze</h3>
+          <h3 className="font-bold text-red-800 border-b border-red-300 pb-1 mb-2">2. Il Flusso di Invio (CRITICO!)</h3>
           <ul className="list-disc pl-5 space-y-2 text-sm text-red-700">
-            <li>**10:30:** Appare l'avviso "È Tardi".</li>
-            <li>**11:59:** STOP ORDINI (non puoi più scegliere il piatto).</li>
-            <li>**12:00:** STOP EMAIL (Si può solo telefonare).</li>
+            <li>**Passaggio 1 (Invia Email):** Un collega (il primo che vede l'avviso "È Tardi" o l'Admin) clicca per aprire l'email con l'ordine aggregato. **Deve inviarla.**</li>
+            <li>**Passaggio 2 (Conferma Blocco):** Subito dopo aver spedito l'email, lo stesso collega DEVE cliccare "CONFERMA INVIO E BLOCCA". Questo blocca il form per tutti e salva l'ordine nello storico.</li>
+          </ul>
+        </div>
+        
+        <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+          <h3 className="font-bold text-yellow-800 border-b border-yellow-300 pb-1 mb-2">3. Scadenze Orarie</h3>
+          <ul className="list-disc pl-5 space-y-2 text-sm text-yellow-700">
+            <li>**10:30:** Appare l'avviso rosso "È Tardi". Iniziare la procedura di invio!</li>
+            <li>**11:59:** **STOP ORDINI!** Non è più possibile scegliere o modificare il piatto.</li>
+            <li>**12:00:** **STOP EMAIL!** L'invio via app è bloccato. Si può solo telefonare al Bar.</li>
           </ul>
         </div>
       </div>
@@ -252,6 +258,8 @@ const LoginScreen = ({ onLogin, colleagues = [] }) => {
             <p className="text-green-200 text-xs italic mt-1 font-serif">
               "Anche nel caos del lavoro, il pranzo resta un momento sacro."
             </p>
+            {/* Aggiungo il telefono qui nel login per completezza */}
+            <span className="bg-white/90 text-green-800 px-2 py-0.5 rounded text-xs font-bold tracking-widest shadow-sm mt-2">TEL. {INITIAL_SETTINGS.phoneBar}</span>
           </div>
         </div>
 
@@ -308,8 +316,6 @@ const LoginScreen = ({ onLogin, colleagues = [] }) => {
   );
 };
 
-// --- COMPONENTE GESTIONE MENU RIMOSSO ---
-
 // --- COMPONENTE ADMIN: STORICO ORDINI ---
 const AdminHistory = ({ db, onClose, user }) => {
   const [selectedDate, setSelectedDate] = useState(formatDate(new Date()));
@@ -327,7 +333,7 @@ const AdminHistory = ({ db, onClose, user }) => {
       const docSnap = await getDoc(docRef);
       if (docSnap.exists()) {
         const data = docSnap.data();
-        // Lo storico legge i dati della sottocollezione "history"
+        // Lo storico legge i dati salvati dal markAsSent
         const orders = data.historyOrders || []; // Legge dalla chiave historyOrders
         setHistoryOrders(orders);
         setHistoryStatus(data.status || 'open');
@@ -350,7 +356,7 @@ const AdminHistory = ({ db, onClose, user }) => {
 
   const deleteDay = async () => {
       if (!user.isAdmin) return;
-      if (!window.confirm(`Sei SICURO di voler cancellare TUTTI gli ordini del ${selectedDate}? Questa azione è irreversibile.`)) return;
+      if (!window.confirm(`Sei SICURO di voler cancellare TUTTI i dati relativi al ${selectedDate}? Questa azione è irreversibile.`)) return;
       
       try {
           // CORRETTO: doc(CollectionRef, docId)
@@ -1139,7 +1145,6 @@ const App = () => {
         {/* TOP BAR */}
         {/* CORREZIONE: Forzato a flex-row e overflow-x-auto, alzato leggermente */}
         <div className="absolute top-2 right-2 z-50 flex flex-row flex-nowrap overflow-x-auto justify-end gap-2 pr-2">
-          {/* NEW BUTTON: MENU MANAGER FOR ALL (RIMOSSO) */}
           
           {user.isAdmin && (
             <>
