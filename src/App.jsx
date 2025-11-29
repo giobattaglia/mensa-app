@@ -17,12 +17,12 @@ const firebaseConfig = {
 const appId = 'mensa-app-v1'; 
 const initialAuthToken = null;
 
-// Percorsi Firestore (Usano ID di prova qui, il Canvas usa i suoi)
+// Percorsi Firestore
 const PUBLIC_DATA_PATH = `artifacts/${appId}/public/data`;
 const PUBLIC_ORDERS_COLLECTION = `${PUBLIC_DATA_PATH}/mealOrders`;
 const CONFIG_DOC_PATH = `${PUBLIC_DATA_PATH}/config`;
 const SETTINGS_DOC_PATH = `${PUBLIC_DATA_PATH}/settings`;
-const HOLIDAYS_DOC_PATH = `${CONFIG_DOC_PATH}/holidays`;
+const HOLIDAYS_DOC_PATH = `${CONFIG_DOC_PATH}/holidays`; // Percorso corretto
 
 
 const BANNER_IMAGE_URL = "https://images.unsplash.com/photo-1559339352-11d035aa65de?q=80&w=2074&auto=format&fit=crop";
@@ -68,7 +68,6 @@ const generateAllowedDates = () => {
 };
 
 const getNextOpenDay = (todayStr, activeDates) => {
-    // Ordina le date attive e trova la prima che viene dopo oggi
     const sortedDates = [...activeDates].sort();
     return sortedDates.find(d => d > todayStr) || sortedDates[0] || null;
 };
@@ -223,7 +222,7 @@ const LoginScreen = ({ onLogin, colleagues = [] }) => {
                     <p className="text-gray-500 text-sm mb-3">Accesso Riservato</p>
 
                     <p className="text-green-700 text-xs italic border-t border-green-100 pt-4 mt-2 font-serif">
-                        "Anche nel caos del lavoro,<br/>il pranzo resta un momento sacro."
+                        "Anche nel caos del lavoro,<br />il pranzo resta un momento sacro."
                     </p>
                 </div>
 
@@ -412,39 +411,37 @@ const AdminCalendar = ({ activeDates, onToggleDate }) => {
                     )
                 })}
             </div>
+            <p className="text-center text-xs text-gray-400 mt-3">Verde = Aperto. Grigio = Chiuso. Clicca per cambiare.</p>
         </div>
     );
 };
 
 // --- ADMIN PANEL ---
-const AdminPanel = ({ db, currentDay, onClose, colleaguesList }) => {
+const AdminPanel = ({ db, onClose, colleaguesList, adminOverride, onToggleForceOpen }) => {
     const [tab, setTab] = useState('cal');
     const [settings, setSettings] = useState(INITIAL_SETTINGS);
-    const [activeDates, setActiveDates] = useState(generateAllowedDates()); // Default Lun/Gio
-    const [isForceOpen, setIsForceOpen] = useState(false);
+    const [activeDates, setActiveDates] = useState(generateAllowedDates());
+    const [loadingDates, setLoadingDates] = useState(true);
 
     // FIX: Load active dates from DB on start
     useEffect(() => {
         if (!db) return;
-        getDoc(doc(db, CONFIG_DOC_PATH, 'holidays')).then(snap => {
-            if (snap.exists() && snap.data().activeDates) setActiveDates(snap.data().activeDates);
-            else setDoc(doc(db, CONFIG_DOC_PATH, 'holidays'), { activeDates: generateAllowedDates() }, { merge: true });
-        }).catch(console.error);
 
+        // Load Holiday Dates
+        getDoc(doc(db, HOLIDAYS_DOC_PATH)).then(snap => {
+            if (snap.exists() && snap.data().activeDates) setActiveDates(snap.data().activeDates);
+            else setDoc(doc(db, HOLIDAYS_DOC_PATH), { activeDates: generateAllowedDates() }, { merge: true }).catch(console.error);
+        }).catch(console.error).finally(() => setLoadingDates(false));
+
+        // Load Settings
         getDoc(doc(db, SETTINGS_DOC_PATH, 'main')).then(snap => { if (snap.exists()) setSettings(snap.data()); }).catch(console.error);
 
-        getDoc(doc(db, CONFIG_DOC_PATH, 'override')).then(snap => { if (snap.exists()) setIsForceOpen(snap.data().isOverride); }).catch(console.error);
     }, [db]);
 
     const handleToggleDate = async (dStr) => {
         const newDates = activeDates.includes(dStr) ? activeDates.filter(d => d !== dStr) : [...activeDates, dStr];
         setActiveDates(newDates);
-        await setDoc(doc(db, CONFIG_DOC_PATH, 'holidays'), { activeDates: newDates }, { merge: true });
-    };
-
-    const handleToggleForceOpen = async (newState) => {
-        setIsForceOpen(newState);
-        await setDoc(doc(db, CONFIG_DOC_PATH, 'override'), { isOverride: newState }, { merge: true });
+        await setDoc(doc(db, HOLIDAYS_DOC_PATH), { activeDates: newDates }, { merge: true });
     };
 
     const saveSettings = async () => {
@@ -460,6 +457,9 @@ const AdminPanel = ({ db, currentDay, onClose, colleaguesList }) => {
         const gmailLink = `https://mail.google.com/mail/?view=cm&fs=1&to=${user.email}&su=${subject}&body=${body}`;
         window.open(gmailLink, '_blank');
     };
+    
+    // Genera l'elenco dei prossimi 10 giorni lavorativi per il calendario
+    const upcoming = generateAllowedDates().filter(d => d >= todayStr).slice(0, 10);
 
     return (
         <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
@@ -482,25 +482,27 @@ const AdminPanel = ({ db, currentDay, onClose, colleaguesList }) => {
                             <div className="bg-purple-50 p-4 rounded-lg border border-purple-200 flex items-center justify-between">
                                 <div>
                                     <p className="text-purple-800 font-bold text-sm">Stato Giornata Attuale:</p>
-                                    <p className={`text-xs font-bold ${isForceOpen ? 'text-green-600' : 'text-red-500'}`}>
-                                        {isForceOpen ? "🔓 SBLOCCATO (Override Attivo)" : "🔴 BLOCCATO (Regole Standard)"}
+                                    <p className={`text-xs font-bold ${adminOverride ? 'text-green-600' : 'text-red-500'}`}>
+                                        {adminOverride ? "🔓 SBLOCCATO (Override Attivo)" : "🔴 BLOCCATO (Regole Standard)"}
                                     </p>
                                 </div>
                                 <button
-                                    onClick={() => handleToggleForceOpen(!isForceOpen)}
-                                    className={`px-4 py-2 rounded text-xs font-bold transition-all ${isForceOpen ? 'bg-green-600 text-white hover:bg-green-700' : 'bg-red-100 text-red-600 border border-red-300 hover:bg-red-200'}`}
+                                    onClick={() => onToggleForceOpen(!adminOverride)}
+                                    className={`px-4 py-2 rounded text-xs font-bold transition-all ${adminOverride ? 'bg-green-600 text-white hover:bg-green-700' : 'bg-red-100 text-red-600 border border-red-300 hover:bg-red-200'}`}
                                 >
-                                    {isForceOpen ? "Blocca Override" : "🔓 Forza Apertura ORA"}
+                                    {adminOverride ? "Blocca Override" : "🔓 Forza Apertura ORA"}
                                 </button>
                             </div>
 
                             <hr className="border-gray-200" />
 
                             {/* CALENDARIO */}
-                            <div className="max-w-xl mx-auto">
-                                <p className="text-sm text-gray-500 mb-4 text-center">Clicca per aprire (Verde) o chiudere (Grigio) un giorno specifico.</p>
-                                <AdminCalendar activeDates={activeDates} onToggleDate={handleToggleDate} />
-                            </div>
+                            {loadingDates ? <LoadingSpinner text="Caricamento calendario..." /> : (
+                                <div className="max-w-xl mx-auto">
+                                    <p className="text-sm text-gray-500 mb-4 text-center">Clicca per aprire (Verde) o chiudere (Grigio) un giorno specifico.</p>
+                                    <AdminCalendar activeDates={activeDates} onToggleDate={handleToggleDate} />
+                                </div>
+                            )}
                         </div>
                     )}
 
@@ -508,7 +510,7 @@ const AdminPanel = ({ db, currentDay, onClose, colleaguesList }) => {
                         <div className="space-y-4">
                             <div className="p-4 bg-blue-50 rounded border border-blue-100 text-center">
                                 <p className="text-blue-800 font-bold text-sm mb-1">Gestione Utenti</p>
-                                <p className="text-xs text-blue-600">La lista utenti e i PIN sono gestiti direttamente nel codice (`COLLEAGUES_LIST`).</p>
+                                <p className="text-xs text-blue-600">La lista utenti e i PIN sono gestiti da codice (contatta Gioacchino per le modifiche).</p>
                             </div>
 
                             <div className="border rounded overflow-hidden">
@@ -585,7 +587,7 @@ const App = () => {
 
     const todayDate = new Date();
     const todayStr = formatDate(todayDate);
-    const [activeDates, setActiveDates] = useState(generateAllowedDates());
+    const [activeDates, setActiveDates] = useState(generateAllowedDates()); // Lun/Gio default
 
     const [time, setTime] = useState(new Date());
     useEffect(() => {
@@ -630,11 +632,11 @@ const App = () => {
                     if (snap.exists()) setAppSettings(snap.data());
                 }, (err) => console.error("Settings listener error:", err));
 
-                const unsubHolidays = onSnapshot(doc(dbInstance, CONFIG_DOC_PATH, 'holidays'), (snap) => {
+                const unsubHolidays = onSnapshot(doc(dbInstance, HOLIDAYS_DOC_PATH), (snap) => {
                     if (snap.exists()) setActiveDates(snap.data().activeDates || generateAllowedDates());
-                    else setDoc(doc(dbInstance, CONFIG_DOC_PATH, 'holidays'), { activeDates: generateAllowedDates() }, { merge: true }).catch(console.error);
+                    else setDoc(doc(dbInstance, HOLIDAYS_DOC_PATH), { activeDates: generateAllowedDates() }, { merge: true }).catch(console.error);
                 }, (err) => console.error("Holidays listener error:", err));
-                
+
                 const unsubOverride = onSnapshot(doc(dbInstance, CONFIG_DOC_PATH, 'override'), (snap) => {
                     if (snap.exists()) setAdminOverride(snap.data().isOverride || false);
                 }, (err) => console.error("Override listener error:", err));
@@ -924,11 +926,7 @@ const App = () => {
     const takeoutOrders = orders.filter(o => o.isTakeout);
 
     // SE CHIUSO E NON OVERRIDE: DISABILITA INPUT MA MOSTRA UI
-    const isClosedView = !isTodayAllowed || (!isTodayAllowed && !adminOverride);
-    
-    // Per logica di invio: se è chiuso, ma l'admin ha bypassato (Override), non è più closedView.
-    const isOrderModuleLocked = isClosedView || isBookingClosed;
-
+    const isClosedView = (!isTodayAllowed && !adminOverride);
 
     return (
         <div className={`min-h-screen font-sans p-2 sm:p-6 pb-20 transition-colors duration-500 bg-gray-100`}>
@@ -962,7 +960,7 @@ const App = () => {
 
                 {/* MODALI */}
                 {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
-                {showAdminPanel && <AdminPanel db={db} currentDay={todayStr} onClose={() => setShowAdminPanel(false)} colleaguesList={COLLEAGUES_LIST} />}
+                {showAdminPanel && <AdminPanel db={db} currentDay={todayStr} onClose={() => setShowAdminPanel(false)} colleaguesList={COLLEAGUES_LIST} adminOverride={adminOverride} onToggleForceOpen={setAdminOverride} />}
                 {showHistory && <AdminHistory db={db} onClose={() => setShowHistory(false)} user={user} />}
 
                 {/* BANNER */}
@@ -994,6 +992,7 @@ const App = () => {
                             Data: <span className="text-white font-bold uppercase">{todayDate.toLocaleDateString('it-IT')}</span>
                         </div>
                         <div className="font-mono font-bold text-white flex items-center gap-2">
+                            {/* SE ADMIN OVERRIDE È ATTIVO, MOSTRA UN AVVISO VERDE INVECE CHE ROSSO */}
                             {adminOverride && <span className="text-green-300 font-bold hidden sm:inline">🔓 OVERRIDE ADMIN ATTIVO </span>}
                             {isLateWarning && !adminOverride && <span className="text-yellow-300 font-bold hidden sm:inline">⚠️ IN CHIUSURA </span>}
                             {isEmailClosed && !adminOverride && <span className="text-red-400 font-bold hidden sm:inline">🛑 TEMPO SCADUTO </span>}
@@ -1001,7 +1000,7 @@ const App = () => {
                         </div>
                     </div>
                     <div className="flex items-center justify-center gap-2 text-xs sm:text-sm">
-                        <div className={`flex items-center gap-1 px-3 py-1 rounded-full ${orderStatus !== 'sent' && !isOrderModuleLocked ? 'bg-green-600 font-bold' : 'bg-gray-700 text-gray-400'}`}>
+                        <div className={`flex items-center gap-1 px-3 py-1 rounded-full ${orderStatus !== 'sent' && !isBookingClosed && isTodayAllowed ? 'bg-green-600 font-bold' : 'bg-gray-700 text-gray-400'}`}>
                             <span className="bg-white text-gray-900 rounded-full w-4 h-4 flex items-center justify-center text-[10px]">1</span>
                             Raccolta
                         </div>
@@ -1191,7 +1190,7 @@ const App = () => {
                     {/* RIGHT: Riepilogo e Invio */}
                     <div className="lg:col-span-4 space-y-6">
 
-                        {/* Box Invio */}
+                        {/* Box Admin / Invio */}
                         <div className="bg-slate-100 p-4 rounded-lg border border-slate-300 shadow-sm">
                             <h3 className="font-bold text-slate-700 mb-4 text-sm uppercase flex items-center gap-2">
                                 <span>🚀</span> Zona Invio
