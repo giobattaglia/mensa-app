@@ -146,8 +146,8 @@ const HelpModal = ({ onClose }) => (
           <h3 className="font-bold text-red-800 border-b border-red-300 pb-1 mb-2">2. Scadenze</h3>
           <ul className="list-disc pl-5 space-y-2 text-sm text-red-700">
             <li>**10:30:** Appare l'avviso "È Tardi".</li>
-            <li>**12:00:** STOP ORDINI (non puoi più scegliere).</li>
-            <li>**13:00:** STOP EMAIL (Bisogna telefonare).</li>
+            <li>**11:59:** STOP ORDINI (non puoi più scegliere).</li>
+            <li>**12:00:** STOP EMAIL (Bisogna telefonare).</li>
           </ul>
         </div>
       </div>
@@ -545,6 +545,7 @@ const AdminPanel = ({ db, currentDay, onClose, colleaguesList, onToggleForceOpen
   const sendCreds = (user) => {
       const subject = encodeURIComponent("Credenziali App Pranzo");
       const adminName = colleaguesList.find(c => c.isAdmin)?.name || "l'amministratore";
+      // Ho corretto l'apostrofo con '\' (l\'amministratore) per evitare errori di sintassi JS
       const body = encodeURIComponent(`Ciao ${user.name},\n\necco il tuo PIN per accedere all'app dei pasti: ${user.pin}\n\nSe vuoi cambiarlo, contatta l\'amministratore (probabilmente ${adminName}).\n\nSaluti!`);
       const gmailLink = `https://mail.google.com/mail/?view=cm&fs=1&to=${user.email}&su=${subject}&body=${body}`;
       window.open(gmailLink, '_blank');
@@ -644,7 +645,7 @@ const AdminPanel = ({ db, currentDay, onClose, colleaguesList, onToggleForceOpen
               <div className="space-y-4">
                  <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-200">
                      <p className="text-xs text-yellow-800 font-bold mb-2">Queste impostazioni sono condivise e applicate a tutti gli utenti.</p>
-                     <p className="text-xs text-yellow-700">Nota: Gli orari di chiusura (12:00, 13:00) sono hardcoded nel codice dell'app.</p>
+                     <p className="text-xs text-yellow-700">Nota: Gli orari di chiusura (11:59, 12:00) sono hardcoded nel codice dell'app.</p>
                  </div>
                  <div className="bg-gray-100 p-4 rounded-lg">
                    <label className="block text-sm font-bold text-gray-700 mb-1">Email del Bar (Destinatario Ordini)</label>
@@ -709,10 +710,22 @@ const App = () => {
   const hour = time.getHours();
   const minute = time.getMinutes();
 
-  // LOGICA ORARIA - Se Admin Override è attivo, ignora le restrizioni orarie
-  const isLateWarning = !adminOverride && ((hour === 10 && minute >= 30) || (hour === 11 && minute < 60)); // 10:30 a 11:59
-  const isBookingClosed = !adminOverride && (hour >= 12); // Dalle 12:00 in poi
-  const isEmailClosed = !adminOverride && (hour >= 13); // Dalle 13:00 in poi
+  // LOGICA ORARIA PRECISA - Se Admin Override è attivo, ignora le restrizioni orarie
+  
+  // 10:30: Inizio Avviso (attivo da 10:30:00 fino a 11:59:59)
+  const isLateWarning = !adminOverride && (
+      (hour === 10 && minute >= 30) || 
+      (hour >= 11 && hour < 12)
+  ); 
+
+  // 11:59: Chiusura Modulo (attivo da 11:59:00 in poi)
+  const isBookingClosed = !adminOverride && (
+      (hour === 11 && minute >= 59) || 
+      (hour >= 12)
+  );
+
+  // 12:00: Chiusura Email (attivo da 12:00:00 in poi)
+  const isEmailClosed = !adminOverride && (hour >= 12); 
 
   const forceStart = () => {
     setInitTimeout(true);
@@ -902,7 +915,7 @@ const App = () => {
 
   const placeOrder = async () => {
     if (orderStatus === 'sent' && !user.isAdmin) { window.alert("Ordine già inviato al bar! Non puoi modificare."); return; }
-    if (isBookingClosed && !user.isAdmin && !adminOverride) { window.alert("Troppo tardi! Sono passate le 12:00. Solo l'admin può modificare."); return; }
+    if (isBookingClosed && !user.isAdmin && !adminOverride) { window.alert("Troppo tardi! Le prenotazioni si chiudono alle 11:59. Solo l'admin può modificare."); return; }
 
     const newErrors = {};
     let hasError = false;
@@ -1154,7 +1167,7 @@ const App = () => {
              </div>
         </div>
 
-        {/* --- ALERT INVIO TARDIVO (10:30 - 12:00) --- */}
+        {/* --- ALERT INVIO TARDIVO (10:30 - 11:59:59) --- */}
         {isLateWarning && !isBookingClosed && orderStatus !== 'sent' && (
           <div className="bg-red-100 border-b-4 border-red-500 p-4 text-center sticky top-0 z-40 shadow-xl animate-pulse">
                <h2 className="text-red-800 font-bold text-xl uppercase mb-2">⏰ È Tardi! Chiudi l'ordine</h2>
@@ -1170,11 +1183,11 @@ const App = () => {
           </div>
         )}
 
-        {/* --- ALERT CRITICO (13:00+) --- */}
+        {/* --- ALERT CRITICO (12:00+) --- */}
         {isEmailClosed && orderStatus !== 'sent' && (
           <div className="bg-gray-900 border-b-4 border-red-600 p-6 text-center sticky top-0 z-50 shadow-2xl">
               <h2 className="text-white font-bold text-2xl uppercase mb-2">🛑 ORDINE WEB CHIUSO</h2>
-              <p className="text-gray-300 mb-4 text-sm">Sono passate le 13:00. Non inviare più email, il bar non la leggerebbe.</p>
+              <p className="text-gray-300 mb-4 text-sm">Sono passate le 12:00. Non inviare più email, il bar non la leggerebbe.</p>
               <a href={`tel:${appSettings.phoneBar}`} className="inline-block bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-8 rounded-full shadow-lg text-lg animate-bounce">
                   📞 CHIAMA IL BAR: {appSettings.phoneBar}
               </a>
@@ -1322,7 +1335,7 @@ const App = () => {
                     ) : isBookingClosed && !user.isAdmin ? (
                         <div className="bg-red-100 p-3 rounded-lg text-center border border-red-300">
                             <span className="text-red-800 font-bold text-lg">🛑 Ordini Chiusi</span>
-                            <p className="text-red-700 text-xs">Le prenotazioni chiudono alle 12:00.</p>
+                            <p className="text-red-700 text-xs">Le prenotazioni si chiudono alle 11:59.</p>
                         </div>
                     ) : orders.some(o => o.userId === actingAsUser?.id) ? (
                         <div className="flex items-center justify-between bg-green-50 p-2 rounded border border-green-200">
