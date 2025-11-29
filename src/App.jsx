@@ -410,7 +410,10 @@ const AdminHistory = ({ db, onClose, user }) => {
         setHistoryStatus('Nessun ordine trovato');
         setHistoryAuthor('');
       }
-    } catch (e) { console.error(e); }
+    } catch (e) { 
+        console.error("Errore caricamento storico:", e);
+        setHistoryOrders([]);
+    }
     setLoadingHistory(false);
   }, [db]);
 
@@ -432,6 +435,9 @@ const AdminHistory = ({ db, onClose, user }) => {
           alert("Errore cancellazione.");
       }
   };
+  
+  // Aggiunto per evitare lo spinner infinito se il caricamento fallisce ma è in corso
+  if (loadingHistory) return <p className="text-center py-8 text-gray-500">Caricamento storico...</p>
 
   return (
     <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
@@ -450,8 +456,7 @@ const AdminHistory = ({ db, onClose, user }) => {
         </div>
 
         <div className="flex-1 overflow-y-auto border rounded-lg p-4 bg-gray-50">
-            {loadingHistory ? <p>Caricamento...</p> : (
-              historyOrders.length === 0 ? <p className="text-gray-500 italic">Nessun ordine in questa data.</p> : (
+            {historyOrders.length === 0 ? <p className="text-gray-500 italic">Nessun ordine in questa data.</p> : (
                 <div className="space-y-2">
                   {historyStatus === 'sent' && (
                     <div className="bg-green-100 border border-green-300 text-green-800 p-2 rounded text-sm font-bold mb-3 text-center">
@@ -471,7 +476,7 @@ const AdminHistory = ({ db, onClose, user }) => {
                   ))}
                 </div>
               )
-            )}
+            }
         </div>
         
         {user.isAdmin && historyOrders.length > 0 && (
@@ -495,11 +500,17 @@ const AdminPanel = ({ db, currentDay, onClose, colleaguesList, onToggleForceOpen
   const [blockedDates, setBlockedDates] = useState([]);
   const [settings, setSettings] = useState(INITIAL_SETTINGS);
   const [loading, setLoading] = useState(true);
+  const [errorLoading, setErrorLoading] = useState(false); // Nuovo stato per gli errori
 
   // Load blocked dates and settings
   useEffect(() => {
-    if (!db || !SETTINGS_DOC_REF || !HOLIDAYS_DOC_REF) return;
+    if (!db || !SETTINGS_DOC_REF || !HOLIDAYS_DOC_REF) {
+        setLoading(false);
+        setErrorLoading(true); // Se i riferimenti sono null, segna errore
+        return;
+    }
     setLoading(true);
+    setErrorLoading(false);
     
     const fetchAdminData = async () => {
         try {
@@ -510,9 +521,12 @@ const AdminPanel = ({ db, currentDay, onClose, colleaguesList, onToggleForceOpen
             ]);
 
             if (holidaysSnap.exists()) setBlockedDates(holidaysSnap.data().dates || []);
-            if (settingsSnap.exists()) setSettings(settingsSnap.data());
+            // Usiamo merge:true nel setDoc, quindi se non esiste il doc, usiamo INITIAL_SETTINGS
+            if (settingsSnap.exists()) setSettings(settingsSnap.data()); 
         } catch (e) {
-            console.error("Errore caricamento dati Admin:", e);
+            console.error("Errore caricamento dati Admin (probabilmente permessi/percorso):", e);
+            setErrorLoading(true); // Segna errore in caso di fallimento della lettura
+            // Continua con i dati di default (INITIAL_SETTINGS) e blockedDates vuoti.
         }
         setLoading(false);
     };
@@ -520,7 +534,7 @@ const AdminPanel = ({ db, currentDay, onClose, colleaguesList, onToggleForceOpen
   }, [db]);
 
   const toggleDate = async (dateStr) => {
-    if (!HOLIDAYS_DOC_REF) return;
+    if (!HOLIDAYS_DOC_REF) { alert("Errore di connessione o configurazione del database."); return; }
     let newDates = [];
     if (blockedDates.includes(dateStr)) {
       newDates = blockedDates.filter(d => d !== dateStr);
@@ -531,16 +545,22 @@ const AdminPanel = ({ db, currentDay, onClose, colleaguesList, onToggleForceOpen
     try {
         // CORRETTO: Uso il riferimento al Documento
         await setDoc(HOLIDAYS_DOC_REF, { dates: newDates }, { merge: true });
-    } catch (e) { console.error("Errore aggiornamento holidays:", e); }
+    } catch (e) { 
+        console.error("Errore aggiornamento holidays:", e);
+        alert("Errore: Impossibile salvare le date. Controlla i permessi.");
+    }
   };
 
   const saveSettings = async () => {
-    if (!db || !SETTINGS_DOC_REF) return;
+    if (!db || !SETTINGS_DOC_REF) { alert("Errore di connessione o configurazione del database."); return; }
     try {
       // CORRETTO: Uso il riferimento al Documento
       await setDoc(SETTINGS_DOC_REF, settings, { merge: true });
       alert("Impostazioni salvate!");
-    } catch (e) { console.error(e); alert("Errore impostazioni"); }
+    } catch (e) { 
+        console.error(e); 
+        alert("Errore: Impossibile salvare le impostazioni. Controlla i permessi.");
+    }
   };
 
   // Funzione per generare mail credenziali (FIXED: USA GMAIL WEB)
@@ -572,6 +592,11 @@ const AdminPanel = ({ db, currentDay, onClose, colleaguesList, onToggleForceOpen
         </div>
 
         <div className="p-6 overflow-y-auto flex-1">
+            {errorLoading && (
+                 <div className="bg-red-100 p-3 mb-4 rounded border border-red-400 text-red-800 text-sm font-bold">
+                     ⚠️ Errore di lettura dei dati di configurazione dal database. Le modifiche potrebbero non essere salvate. Controlla i permessi di Firebase (Firestore Security Rules).
+                 </div>
+            )}
             {activeTab === 'calendar' && (
               <div className="space-y-6">
                 <div className="bg-purple-50 p-4 rounded-lg border border-purple-200 flex items-center justify-between">
