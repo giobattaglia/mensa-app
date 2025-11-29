@@ -689,6 +689,64 @@ const AdminPanel = ({ db, currentDay, onClose, colleaguesList, onToggleForceOpen
   );
 };
 
+// --- FUNZIONI UTILITY PER RIEPILOGO AGGREGATO ---
+
+const aggregateOrders = (orders) => {
+    const aggregated = {};
+
+    orders.forEach(order => {
+        // Chiave unica per raggruppamento (piatto + acqua + bar/asporto)
+        const key = `${order.itemName}|${order.waterChoice}|${order.isTakeout ? 'Asporto' : 'Bar'}`;
+        
+        if (!aggregated[key]) {
+            aggregated[key] = {
+                itemName: order.itemName,
+                waterChoice: order.waterChoice,
+                isTakeout: order.isTakeout,
+                count: 0
+            };
+        }
+        aggregated[key].count++;
+    });
+
+    // Converte l'oggetto in un array e lo ordina per quantità (dal più ordinato al meno)
+    return Object.values(aggregated).sort((a, b) => b.count - a.count);
+};
+
+// --- COMPONENTE RIEPILOGO AGGREGATO (Per Admin) ---
+const AggregatedSummary = ({ orders }) => {
+    const aggregatedList = useMemo(() => aggregateOrders(orders), [orders]);
+
+    if (aggregatedList.length === 0) return null;
+
+    return (
+        <div className="bg-white p-4 rounded-xl shadow border border-blue-200 mb-6">
+            <h3 className="font-bold text-blue-800 border-b pb-2 mb-3 flex justify-between items-center">
+                <span>📊 Riepilogo Aggregato (Da Ordinare)</span>
+                <span className="text-xs text-gray-500">Totale Piatti: {orders.length}</span>
+            </h3>
+            <div className="space-y-3">
+                {aggregatedList.map((item, index) => (
+                    <div key={index} className="flex justify-between items-center bg-blue-50 p-3 rounded-lg border border-blue-100">
+                        <div className="flex items-center gap-2">
+                            <span className="font-extrabold text-lg text-blue-900 w-6 text-center">{item.count}x</span>
+                            <div>
+                                <p className="font-bold text-gray-700 text-sm">{item.itemName}</p>
+                                <p className="text-xs text-gray-500">
+                                    <span className={`px-1 rounded-sm text-white text-[10px] mr-1 ${item.isTakeout ? 'bg-red-500' : 'bg-orange-500'}`}>
+                                        {item.isTakeout ? 'ASPORTO' : 'BAR'}
+                                    </span>
+                                    Acqua: {item.waterChoice}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+};
+
 // --- COMPONENTE PRINCIPALE ---
 const App = () => {
   const [user, setUser] = useState(null); 
@@ -799,7 +857,7 @@ const App = () => {
           setIsShopOpen(isBaseValid && !isBlockedByAdmin);
           
         } else {
-            // Se non ci sono blocchi, usa solo la logica base (Lunedì/Giovedì)
+            // Se non ci sono blocchi, usa solo la logica base (Lunedì o Giovedì)
             setIsShopOpen(isBaseValid);
         }
       } catch (e) { 
@@ -1399,6 +1457,9 @@ const App = () => {
             {/* RIGHT: Riepilogo e Admin */}
             <div className="lg:col-span-4 space-y-6">
             
+            {/* Riepilogo Aggregato - NUOVO */}
+            <AggregatedSummary orders={orders} />
+
             {/* Box Admin / Invio */}
             <div className="bg-slate-100 p-4 rounded-lg border border-slate-300 shadow-sm">
               <h3 className="font-bold text-slate-700 mb-4 text-sm uppercase flex items-center gap-2">
@@ -1485,7 +1546,7 @@ const App = () => {
 
             <div className="bg-white p-4 rounded-xl shadow border h-full max-h-[600px] overflow-y-auto">
               <h3 className="font-bold text-gray-800 border-b pb-2 mb-2 flex justify-between items-center">
-                <span>👀 Riepilogo Ordini</span>
+                <span>👀 Riepilogo Ordini Individuale</span>
                 <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{orders.length}</span>
               </h3>
               
