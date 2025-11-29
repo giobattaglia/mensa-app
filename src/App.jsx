@@ -458,6 +458,7 @@ const AdminPanel = ({ db, onClose, colleaguesList, adminOverride, onToggleForceO
         window.open(gmailLink, '_blank');
     };
     
+    // Genera l'elenco dei prossimi 10 giorni lavorativi per il calendario
     const upcoming = generateAllowedDates().filter(d => d >= todayStr).slice(0, 10);
 
     return (
