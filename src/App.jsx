@@ -459,7 +459,7 @@ const AdminHistory = ({ db, onClose, user }) => {
                     </div>
                   )}
                   {historyOrders.map((o, i) => (
-                    <div key={i} className="bg-white p-2 rounded border flex justify-between text-sm items-center">
+                    <div key={i} className="text-sm flex justify-between items-center p-2 rounded hover:bg-gray-50 border border-transparent hover:border-gray-200 group relative">
                       <div className="flex gap-2 items-center">
                         <span className="font-bold text-gray-700">{o.userName}</span>
                         <span className="text-gray-600">{o.itemName}</span>
@@ -735,7 +735,12 @@ const App = () => {
 
   // 1. INIT FIREBASE & LOAD CORE DATA
   useEffect(() => {
-    if (!db || !auth || !SETTINGS_DOC_REF || !DAILY_MENU_DOC_REF || !HOLIDAYS_DOC_REF) return;
+    if (!db || !auth || !SETTINGS_DOC_REF || !DAILY_MENU_DOC_REF || !HOLIDAYS_DOC_REF) {
+        // Se Firebase non è inizializzato (es. variabili d'ambiente mancanti in Vercel), forziamo il timeout
+        console.error("Firebase non inizializzato. Impossibile avviare la connessione al database.");
+        setInitTimeout(true);
+        return;
+    }
     
     const timeoutId = setTimeout(() => {
       setInitTimeout(true);
@@ -784,8 +789,13 @@ const App = () => {
 
     const initAuth = async () => {
         if (!auth.currentUser) {
-            if (initialAuthToken) await signInWithCustomToken(auth, initialAuthToken);
-            else await signInAnonymously(auth);
+            try {
+                if (initialAuthToken) await signInWithCustomToken(auth, initialAuthToken);
+                else await signInAnonymously(auth);
+            } catch (e) {
+                console.error("Errore Autenticazione Firebase:", e);
+                // Non blocca l'app, ma fallisce l'autenticazione.
+            }
         }
     };
 
@@ -810,7 +820,7 @@ const App = () => {
   // Forzatura manuale caricamento (per evitare blocchi)
   useEffect(() => {
     if (initTimeout && loading) {
-      console.warn("Timeout caricamento: forzo avvio con dati locali.");
+      console.warn("Timeout caricamento: forzo avvio con dati locali e accesso limitato.");
       setAppSettings(INITIAL_SETTINGS);
       setDataLoaded(true);
       setIsAuthReady(true);
