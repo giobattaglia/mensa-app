@@ -54,6 +54,8 @@ const BASE_ORDERS_COLLECTION = db ? collection(db, `/artifacts/${appId}/public/d
 const SETTINGS_DOC_REF = BASE_CONFIG_COLLECTION ? doc(BASE_CONFIG_COLLECTION, 'main') : null;
 const HOLIDAYS_DOC_REF = BASE_CONFIG_COLLECTION ? doc(BASE_CONFIG_COLLECTION, 'holidays') : null;
 const DAILY_MENU_DOC_REF = BASE_CONFIG_COLLECTION ? doc(BASE_CONFIG_COLLECTION, 'dailyMenu') : null;
+// Riferimento al documento che tiene traccia dell'UID Firebase dell'Admin
+const ADMIN_UID_DOC_REF = BASE_CONFIG_COLLECTION ? doc(BASE_CONFIG_COLLECTION, 'adminUser') : null; 
 
 const BANNER_IMAGE_URL = "https://images.unsplash.com/photo-1559339352-11d035aa65de?q=80&w=2074&auto=format&fit=crop"; 
 
@@ -76,6 +78,10 @@ const INITIAL_SETTINGS = {
   emailBar: "gioacchino.battaglia@comune.formigine.mo.it",
   phoneBar: "0598751381"
 };
+
+// Variabile utile per le Regole di Sicurezza, se l'utente ADMIN usa un PIN hardcoded,
+// il suo UID sarà l'unico con i permessi di scrittura sul DB di CONFIG.
+const USER_ADMIN_ID = 'u5'; 
 
 // --- UTILITÀ CALENDARIO ---
 const formatDate = (date) => date.toISOString().split('T')[0];
@@ -330,8 +336,8 @@ const PublicMenuManager = ({ db, onClose, currentMenu }) => {
             alert("Menu aggiornato con successo! 🍝");
             onClose();
         } catch(e) {
-            console.error(e);
-            alert("Errore aggiornamento menu");
+            console.error("ERRORE SALVATAGGIO MENU (Permessi?):", e);
+            alert("Errore aggiornamento menu (Permessi di Scrittura non concessi).");
         }
         setLoading(false);
     };
@@ -344,7 +350,8 @@ const PublicMenuManager = ({ db, onClose, currentMenu }) => {
            await setDoc(DAILY_MENU_DOC_REF, { items: [] }, { merge: true });
            onClose();
         } catch (e) {
-           console.error("Errore pulizia menu:", e);
+           console.error("ERRORE PULIZIA MENU (Permessi?):", e);
+           alert("Errore pulizia menu (Permessi di Scrittura non concessi).");
         }
         setLoading(false);
     };
@@ -757,6 +764,7 @@ const App = () => {
   const [dataLoaded, setDataLoaded] = useState(false); 
   const [dailyMenu, setDailyMenu] = useState([]); 
   const [adminOverride, setAdminOverride] = useState(false); // STATO PER FORZARE APERTURA
+  const [adminUid, setAdminUid] = useState(null); // UID Firebase dell'Admin
 
   // Dati Ordini del Giorno
   const [orders, setOrders] = useState([]);
@@ -816,7 +824,7 @@ const App = () => {
 
   // 1. INIT FIREBASE & LOAD CORE DATA
   useEffect(() => {
-    if (!db || !auth || !SETTINGS_DOC_REF || !DAILY_MENU_DOC_REF || !HOLIDAYS_DOC_REF) {
+    if (!db || !auth || !SETTINGS_DOC_REF || !DAILY_MENU_DOC_REF || !HOLIDAYS_DOC_REF || !ADMIN_UID_DOC_REF) {
         // Se Firebase non è inizializzato (es. variabili d'ambiente mancanti in Vercel), forziamo il timeout
         console.error("Firebase non inizializzato. Impossibile avviare la connessione al database.");
         setInitTimeout(true);
@@ -836,8 +844,14 @@ const App = () => {
        const unsubMenu = onSnapshot(DAILY_MENU_DOC_REF, (snap) => {
            if (snap.exists()) setDailyMenu(snap.data().items || []);
        });
+       
+       // Listener per l'UID dell'Admin (usato per le regole di sicurezza)
+       const unsubAdminUid = onSnapshot(ADMIN_UID_DOC_REF, (snap) => {
+           if (snap.exists()) setAdminUid(snap.data().adminUid || null);
+       });
 
-       return () => { unsubSettings(); unsubMenu(); };
+
+       return () => { unsubSettings(); unsubMenu(); unsubAdminUid(); };
     };
 
     const checkDateAccess = async () => {
@@ -909,19 +923,31 @@ const App = () => {
     }
   }, [initTimeout, loading]);
 
-  // Restore user session
+  // Restore user session & Save Admin UID
   useEffect(() => {
-      if (dataLoaded && isAuthReady && !user) {
+      if (dataLoaded && isAuthReady && !user && auth.currentUser) {
           const savedUserId = sessionStorage.getItem('mealAppUser');
+          const firebaseUid = auth.currentUser.uid;
+          
           if (savedUserId) {
             const found = COLLEAGUES_LIST.find(c => c.id === savedUserId);
             if (found) {
                 setUser(found);
                 setActingAsUser(found); 
+                
+                // --- NUOVA LOGICA: SALVA UID ADMIN ---
+                if (found.isAdmin && found.id === USER_ADMIN_ID && db && ADMIN_UID_DOC_REF) {
+                    if (adminUid !== firebaseUid) {
+                        // Se l'UID di Firebase dell'Admin non è salvato o è diverso, salvalo.
+                        setDoc(ADMIN_UID_DOC_REF, { adminUid: firebaseUid, internalId: found.id }, { merge: true })
+                            .then(() => setAdminUid(firebaseUid))
+                            .catch(e => console.error("Errore salvataggio Admin UID:", e));
+                    }
+                }
             }
           }
       }
-  }, [dataLoaded, isAuthReady, user]);
+  }, [dataLoaded, isAuthReady, user, auth.currentUser, db, adminUid]);
 
   // 2. LISTENER ORDINI
   useEffect(() => {
