@@ -83,15 +83,51 @@ const LoadingSpinner = ({ text, onForceStart }) => (
 
 // --- COMPONENTI UI ---
 
+const ClosedScreen = ({ nextDate }) => {
+    let formattedNext = "Presto";
+    if (nextDate) {
+        try {
+            const nextDateObj = new Date(nextDate);
+            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            formattedNext = nextDateObj.toLocaleDateString('it-IT', options);
+        } catch (e) {
+            formattedNext = nextDate;
+        }
+    }
+
+    return (
+        <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-lg text-center border-t-8 border-gray-400">
+            <div className="mb-6 text-gray-300">
+                <svg className="w-20 h-20 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+            </div>
+            <h1 className="text-3xl font-extrabold text-gray-800 mb-2">😴 Oggi Riposo</h1>
+            <p className="text-gray-600 mb-6">
+                Le prenotazioni sono chiuse per oggi. Puoi comunque consultare il tuo Storico.
+            </p>
+
+            <div className="bg-green-50 p-4 rounded-lg border border-green-200 inline-block w-full mb-6">
+                <p className="text-sm text-green-800 font-bold uppercase tracking-wider mb-1">Prossima Apertura</p>
+                <p className="text-2xl text-green-900 font-serif capitalize">{formattedNext}</p>
+            </div>
+        </div>
+    );
+};
+
 const HelpModal = ({ onClose }) => (
     <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm" onClick={onClose}>
         <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 relative" onClick={e => e.stopPropagation()}>
             <button onClick={onClose} className="absolute top-4 right-4 text-2xl text-gray-400 hover:text-gray-600">&times;</button>
             <h2 className="text-xl font-bold text-green-800 mb-4">ℹ️ Guida Rapida</h2>
             <div className="space-y-4 text-sm text-gray-600">
-                <p>• <strong>Giorni:</strong> Si ordina Lunedì e Giovedì.</p>
-                <p>• <strong>10:30:</strong> STOP ORDINI. Scatta l'allarme "È Tardi" e si può solo inviare l'email.</p>
-                <p>• <strong>12:00:</strong> STOP EMAIL. Rimane solo il telefono.</p>
+                <p>• <strong>Giorni:</strong> Il sistema apre di default **solo i giorni Lunedì e Giovedì**. L'Admin può aprire altri giorni tramite Calendario.</p>
+                <p>• <strong>Scadenze:</strong></p>
+                <ul className="list-disc pl-5 space-y-2 text-sm text-red-700">
+                    <li>**10:30:** Scadenza per salvare l'ordine e per inviare la mail di gruppo.</li>
+                    <li>**12:00:** STOP ORDINI. Il modulo si blocca per tutti.</li>
+                    <li>**13:00:** STOP EMAIL. L'unico tasto disponibile è "CHIAMA IL BAR".</li>
+                </ul>
             </div>
             <button onClick={onClose} className="w-full mt-6 bg-green-600 text-white py-3 rounded-lg font-bold shadow-md hover:bg-green-700">Ho Capito</button>
         </div>
@@ -134,11 +170,12 @@ const LoginScreen = ({ onLogin }) => {
 
     return (
         <div className="min-h-screen flex items-center justify-center p-4 relative bg-gray-900 font-sans">
+            {/* SFONDO CON IMMAGINE */}
             <div className="absolute inset-0 bg-cover bg-center z-0" style={{ backgroundImage: `url(${LOGIN_BG_URL})`, opacity: 0.6 }}></div>
             <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent z-0"></div>
             <div className="bg-white/95 backdrop-blur-xl p-8 rounded-3xl shadow-2xl w-full max-w-md border-t-8 border-green-700 relative z-10 animate-fade-in-up">
                 <div className="text-center mb-8">
-                    <div className="inline-block p-4 bg-green-50 rounded-full shadow-inner border border-green-100 mb-4">
+                    <div className="inline-block p-4 bg-green-50 rounded-full shadow-inner border border-green-200 mb-4">
                         <span className="text-4xl">☕</span>
                     </div>
                     <h1 className="text-3xl font-extrabold text-green-900 mb-2 font-serif tracking-tight">7 MILA CAFFÈ</h1>
@@ -166,93 +203,10 @@ const LoginScreen = ({ onLogin }) => {
     );
 };
 
-// --- STATISTICHE BUONI ---
-const UserStatsModal = ({ db, user, onClose }) => {
-  const [selectedMonth, setSelectedMonth] = useState(formatDate(new Date()).slice(0, 7)); 
-  const [userStats, setUserStats] = useState([]);
-  const [loadingStats, setLoadingStats] = useState(false);
-  const [totalMeals, setTotalMeals] = useState(0);
+// --- STATISTICHE BUONI (NON USATO NELLA VERSIONE FINALE) ---
+const UserStatsModal = ({ onClose }) => { return null; }; // Componente rimosso per stabilità
 
-  const loadStats = async () => {
-    setLoadingStats(true);
-    const [year, month] = selectedMonth.split('-');
-    const startDate = `${year}-${month}-01`;
-    const lastDay = new Date(year, month, 0).getDate();
-    const endDate = `${year}-${month}-${lastDay}`;
-
-    try {
-        const querySnapshot = await getDocs(collection(db, PUBLIC_ORDERS_COLLECTION));
-        
-        let ordersFound = [];
-        let count = 0;
-
-        querySnapshot.forEach((doc) => {
-            const data = doc.data();
-            const d = data.mealDate;
-            if (d >= startDate && d <= endDate && data.status === 'sent') {
-                const myOrder = (data.orders || []).find(o => o.userId === user.id);
-                if (myOrder) {
-                    ordersFound.push({
-                        date: d,
-                        item: myOrder.itemName,
-                        type: myOrder.isTakeout ? 'Asporto' : 'Bar'
-                    });
-                    count++;
-                }
-            }
-        });
-
-        ordersFound.sort((a, b) => b.date.localeCompare(a.date));
-        setUserStats(ordersFound);
-        setTotalMeals(count);
-
-    } catch (e) { console.error(e); }
-    setLoadingStats(false);
-  };
-
-  useEffect(() => { loadStats(); }, [selectedMonth, db, user]);
-
-  const handleExport = () => {
-      let csv = "Data,Piatto,Tipo\n";
-      userStats.forEach(row => { csv += `${row.date},"${row.item}",${row.type}\n`; });
-      downloadCSV(csv, `Buoni_${user.name}_${selectedMonth}.csv`);
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
-      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 relative h-[80vh] flex flex-col">
-        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-2xl font-bold">&times;</button>
-        <h2 className="text-xl font-bold text-teal-800 mb-4">📊 I Miei Buoni</h2>
-        <div className="mb-4 bg-teal-50 p-4 rounded-lg border border-teal-100 text-center">
-            <label className="block text-xs font-bold text-teal-600 uppercase mb-1">Mese</label>
-            <input type="month" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="border p-2 rounded text-center font-bold text-gray-700 w-full" />
-            <div className="mt-3 pt-3 border-t border-teal-200">
-                <span className="text-4xl font-bold text-teal-700 block">{totalMeals}</span>
-                <span className="text-xs text-teal-500 uppercase font-bold">Pasti Confermati</span>
-            </div>
-        </div>
-        <div className="flex justify-end mb-2">
-            <button onClick={handleExport} className="text-xs bg-green-100 text-green-700 px-3 py-1 rounded font-bold hover:bg-green-200">📥 CSV</button>
-        </div>
-        <div className="flex-1 overflow-y-auto border-t border-gray-100 pt-2">
-           {loadingStats ? <p className="text-center text-gray-400 p-4">...</p> : (
-             userStats.length === 0 ? <p className="text-gray-400 italic text-center p-4 text-sm">Nessun ordine.</p> : (
-               <div className="space-y-2">
-                 {userStats.map((stat, i) => (
-                   <div key={i} className="flex justify-between items-center p-3 hover:bg-gray-50 rounded border-b border-gray-100 last:border-0">
-                      <div><span className="text-xs font-bold text-gray-400 block">{stat.date}</span><span className="text-sm font-bold text-gray-700">{stat.item}</span></div>
-                      <span className={`text-[10px] px-2 py-1 rounded font-bold uppercase ${stat.type === 'Asporto' ? 'bg-red-100 text-red-600' : 'bg-orange-100 text-orange-600'}`}>{stat.type}</span>
-                   </div>
-                 ))}
-               </div>
-             )
-           )}
-        </div>
-      </div>
-    </div>
-  );
-};
-
+// --- COMPONENTE ADMIN: STORICO ORDINI ---
 const AdminHistory = ({ db, onClose, user }) => {
     const [selectedDate, setSelectedDate] = useState(formatDate(new Date()));
     const [historyOrders, setHistoryOrders] = useState([]);
@@ -352,7 +306,7 @@ const AdminCalendar = ({ activeDates, onToggleDate, todayStr }) => {
                 {['L', 'M', 'M', 'G', 'V', 'S', 'D'].map(d => <span key={d} className="text-xs font-bold text-gray-500">{d}</span>)}
             </div>
             <div className="grid grid-cols-7 gap-1">
-                {Array.from({ length: startOffset }).map((_, i) => <div key={`e-${i}`}></div>)}
+                {Array.from({ length: startOffset }).map((_, i) => <div key={`${currentMonth.getFullYear()}-${currentMonth.getMonth()}-empty-${i}`}></div>)}
                 {days.map(d => {
                     const dStr = formatDate(d);
                     const isActive = activeDates.includes(dStr);
@@ -384,19 +338,22 @@ const AdminPanel = ({ db, onClose, colleaguesList, adminOverride, onToggleForceO
         getDoc(doc(db, SETTINGS_DOC_PATH, 'main')).then(snap => { if (snap.exists()) setSettings(snap.data()); });
     }, [db]);
 
-    const toggleDate = async (dStr) => {
+    const handleToggleDate = async (dStr) => {
         const newDates = activeDates.includes(dStr) ? activeDates.filter(d => d !== dStr) : [...activeDates, dStr];
         setActiveDates(newDates);
         await setDoc(doc(db, HOLIDAYS_DOC_PATH), { activeDates: newDates }, { merge: true });
     };
-    
+
     const saveSettings = async () => {
         await setDoc(doc(db, SETTINGS_DOC_PATH, 'main'), settings, { merge: true });
         alert("Salvato!");
     };
 
-    const sendPin = (u) => {
-        window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${u.email}&su=PIN%20Mensa&body=Ciao%20${u.name},%0AIL%20TUO%20PIN:%20${u.pin}`, '_blank');
+    const sendCreds = (user) => {
+        const subject = encodeURIComponent("Credenziali App Pranzo");
+        const body = encodeURIComponent(`Ciao ${user.name},\n\necco il tuo PIN per accedere all'app dei pasti: ${user.pin}\n\nSe vuoi cambiarlo, contattami.\n\nSaluti,\n${adminName}`);
+        const gmailLink = `https://mail.google.com/mail/?view=cm&fs=1&to=${user.email}&su=${subject}&body=${body}`;
+        window.open(gmailLink, '_blank');
     };
 
     return (
@@ -522,18 +479,17 @@ const App = () => {
 
     // Restore user session (dopo il caricamento)
     useEffect(() => {
-        if (dataLoaded && isAuthReady && !user) {
-            const savedUserId = sessionStorage.getItem('mealUser');
-            if (savedUserId) { 
-                const found = COLLEAGUES_LIST.find(c => c.id === savedUserId); 
-                if (found) { setUser(found); setActingAsUser(found); }
-            }
+        if (user || !dataLoaded || !COLLEAGUES_LIST.length) return;
+        const savedUserId = sessionStorage.getItem('mealUser');
+        if (savedUserId) { 
+            const found = COLLEAGUES_LIST.find(c => c.id === savedUserId); 
+            if (found) { setUser(found); setActingAsUser(found); }
         }
-    }, [dataLoaded, isAuthReady]);
+    }, [dataLoaded, user]);
 
     // LISTENER ORDINI
     useEffect(() => {
-        if (!db || !isAuthReady) return;
+        if (!db || !auth || !auth.currentUser) return;
         const docRef = doc(db, PUBLIC_ORDERS_COLLECTION, todayStr);
         const unsubscribe = onSnapshot(docRef, (docSnap) => {
             if (docSnap.exists()) {
@@ -543,24 +499,24 @@ const App = () => {
                 setOrderAuthor(data.confirmedBy || '');
                 if (actingAsUser) {
                     const existingOrder = (data.orders || []).find(o => o.userId === actingAsUser.id);
-                    if (existingOrder) { setDishName(existingOrder.itemName || ''); setSelectedWater(existingOrder.waterChoice || ''); setDiningChoice(existingOrder.isTakeout ? 'asporto' : 'bar'); }
-                    else { setDishName(''); setSelectedWater(''); setDiningChoice(''); }
+                    if (existingOrder) { setDish(existingOrder.itemName || ''); setWater(existingOrder.waterChoice || ''); setType(existingOrder.isTakeout ? 'asporto' : 'bar'); }
+                    else { setDish(''); setWater(''); setType(''); }
                 }
             } else { setOrders([]); setOrderStatus('open'); setOrderAuthor(''); }
         }, (err) => { console.error("Errore listener ordini:", err); });
         return () => unsubscribe();
-    }, [db, isAuthReady, todayStr, actingAsUser]);
+    }, [db, auth, actingAsUser, todayStr]);
 
 
     // --- HANDLERS DI BASE ---
 
-    const handleLogin = (colleague) => { setUser(colleague); setActingAsUser(colleague); sessionStorage.setItem('mealAppUser', colleague.id); };
+    const handleLogin = (colleague) => { setUser(colleague); setActingAsUser(colleague); sessionStorage.setItem('mealUser', colleague.id); };
     
     // Funzione handleLogout (era mancante nella visibilità precedente)
     const handleLogout = () => { 
         setUser(null); setActingAsUser(null); 
         sessionStorage.removeItem('mealAppUser'); 
-        setDishName(''); setSelectedWater(''); setDiningChoice(''); 
+        setDish(''); setWater(''); setType(''); 
     };
 
     const handleAdminUserChange = (e) => { const targetId = e.target.value; const targetUser = COLLEAGUES_LIST.find(c => c.id === targetId); if (targetUser) { setActingAsUser(targetUser); setMessage(''); } };
@@ -590,7 +546,7 @@ const App = () => {
     // --- UTILITY MAIL ---
     const getAllEmails = () => COLLEAGUES_LIST.map(c => c.email).filter(email => email && email.includes('@')).join(',');
 
-    const generateEmailText = () => {
+    const generateMail = () => {
         const groupedDishes = orders.reduce((acc, o) => { const key = o.itemName.trim(); acc[key] = (acc[key] || 0) + 1; return acc; }, {});
         const water = orders.reduce((acc, o) => { const w = o.waterChoice || 'Nessuna'; acc[w] = (acc[w] || 0) + 1; return acc; }, {});
         let text = `Ciao Laura,\n`;
@@ -630,7 +586,7 @@ const App = () => {
     };
 
     const openLateEmail = () => {
-        const subject = encodeURIComponent(`Ordine Tardivo/Personale - ${todayStr}`);
+        const subject = encodeURIComponent(`Ordine Personale Tardivo - ${todayStr}`);
         const body = encodeURIComponent(`Ciao, sono ${user.name}.\nVorrei ordinare per oggi:\n\n- [SCRIVI QUI IL PIATTO]\n\nGrazie!`);
         window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${settings.emailBar}&su=${subject}&body=${body}`, '_blank');
     };
@@ -712,7 +668,7 @@ const App = () => {
                              {isBookingClosed ? (
                                  <div className="bg-red-50 border border-red-200 p-6 rounded-xl text-center">
                                      <div className="text-3xl mb-2">🛑</div>
-                                     <h3 className="text-red-800 font-bold text-lg">ORDINI CHIUSI (10:30)</h3>
+                                     <h3 className="text-red-800 font-bold text-lg">ORDINI CHIUSI (12:00)</h3>
                                      <p className="text-red-600 text-sm">Il tempo per ordinare è scaduto.</p>
                                  </div>
                              ) : (
