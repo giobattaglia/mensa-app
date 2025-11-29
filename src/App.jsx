@@ -146,9 +146,7 @@ const HelpModal = ({ onClose }) => (
           <h3 className="font-bold text-red-800 border-b border-red-300 pb-1 mb-2">2. Scadenze</h3>
           <ul className="list-disc pl-5 space-y-2 text-sm text-red-700">
             <li>**10:30:** Appare l'avviso "È Tardi".</li>
-            {/* CORREZIONE TESTO: RIPRISTINATO 11:59 */}
             <li>**11:59:** STOP ORDINI (non puoi più scegliere).</li>
-            {/* CORREZIONE TESTO: RIPRISTINATO 12:00 */}
             <li>**12:00:** STOP EMAIL (Bisogna telefonare).</li>
           </ul>
         </div>
@@ -1124,8 +1122,8 @@ const App = () => {
       <div className={`max-w-5xl mx-auto bg-white shadow-xl rounded-2xl overflow-hidden relative transition-all duration-300`}>
         
         {/* TOP BAR */}
-        {/* CORREZIONE: Forzato a flex-row e overflow-x-auto */}
-        <div className="absolute top-4 right-4 z-50 flex flex-row flex-nowrap overflow-x-auto justify-end gap-2 pr-2">
+        {/* CORREZIONE: Forzato a flex-row e overflow-x-auto, alzato leggermente */}
+        <div className="absolute top-2 right-2 z-50 flex flex-row flex-nowrap overflow-x-auto justify-end gap-2 pr-2">
           {/* NEW BUTTON: MENU MANAGER FOR ALL */}
           <button onClick={() => setShowMenuManager(true)} className="flex-shrink-0 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold px-3 py-1 rounded-full shadow border border-purple-500 flex items-center gap-1">
             📝 Menu
@@ -1165,15 +1163,13 @@ const App = () => {
             backgroundImage: BANNER_IMAGE_URL ? `url(${BANNER_IMAGE_URL})` : 'none' 
           }}
         >
-           <div className={`absolute inset-0 ${BANNER_IMAGE_URL ? 'bg-black/60' : 'bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-yellow-200/10 to-green-900'}`}></div>
-           <div className="relative z-10 p-6 pt-10 flex flex-col md:flex-row justify-between items-center text-center md:text-left gap-4">
-             <div>
-               <h1 className="text-4xl font-extrabold tracking-tight uppercase drop-shadow-lg" style={{fontFamily: 'serif'}}>7 MILA CAFFÈ</h1>
-               <div className="flex items-center justify-center md:justify-start gap-2 mt-1">
-                 <span className="bg-white/90 text-green-800 px-2 py-0.5 rounded text-xs font-bold tracking-widest shadow-sm">TEL. {appSettings.phoneBar}</span>
-               </div>
+           <div className={`absolute inset-0 ${BANNER_IMAGE_URL ? 'bg-black/60' : 'bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-yellow-200/10 to-green-900'} flex flex-col justify-center items-center text-center p-6 pt-10`}>
+             <h1 className="text-4xl font-extrabold tracking-tight uppercase drop-shadow-lg" style={{fontFamily: 'serif'}}>7 MILA CAFFÈ</h1>
+             <div className="flex items-center justify-center md:justify-start gap-2 mt-1">
+               <span className="bg-white/90 text-green-800 px-2 py-0.5 rounded text-xs font-bold tracking-widest shadow-sm">TEL. {appSettings.phoneBar}</span>
              </div>
-             <div className="hidden md:block max-w-md italic font-serif text-green-50 text-lg border-l-2 border-green-400 pl-4 drop-shadow-md">
+             {/* FRASE CENTRATA */}
+             <div className="max-w-md italic font-serif text-green-50 text-lg border-t-2 border-green-400 pt-3 mt-4 drop-shadow-md">
                "Anche nel caos del lavoro,<br/>il pranzo resta un momento sacro."
              </div>
            </div>
