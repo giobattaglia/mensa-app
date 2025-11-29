@@ -430,7 +430,7 @@ const AdminHistory = ({ db, onClose, user }) => {
 };
 
 // --- COMPONENTE ADMIN: PANNELLO COMPLETO ---
-const AdminPanel = ({ db, currentDay, onClose, colleaguesList, onToggleForceOpen, isForceOpen }) => {
+const AdminPanel = ({ db, currentDay, onClose, colleaguesList, onToggleForceOpen, isForceOpen, resetDatabaseState }) => {
   const [activeTab, setActiveTab] = useState('calendar'); 
   const [blockedDates, setBlockedDates] = useState([]);
   const [settings, setSettings] = useState(INITIAL_SETTINGS);
@@ -618,6 +618,14 @@ const AdminPanel = ({ db, currentDay, onClose, colleaguesList, onToggleForceOpen
                    <input className="w-full p-2 border rounded" value={settings.phoneBar} onChange={e => setSettings({...settings, phoneBar: e.target.value})} />
                  </div>
                  <button onClick={saveSettings} className="bg-green-600 text-white px-6 py-2 rounded font-bold shadow hover:bg-green-700">Salva Impostazioni</button>
+                 
+                 {/* PULSANTE TEMPORANEO DI RESET */}
+                 <div className="pt-6 border-t mt-6">
+                     <button onClick={resetDatabaseState} className="w-full bg-red-600 hover:bg-red-700 text-white py-2 rounded font-bold text-sm">
+                         [⚠️ RESET DATABASE (ADMIN)]
+                     </button>
+                     <p className="text-xs text-gray-500 mt-1 text-center">Questo pulsante elimina tutti i dati di Configurazione (Settings, Holidays, AdminUID) dal DB. Usalo se l'Admin Panel è bloccato.</p>
+                 </div>
               </div>
             )}
         </div>
@@ -714,7 +722,7 @@ const App = () => {
   const [showHelp, setShowHelp] = useState(false); 
   const [showAdminPanel, setShowAdminPanel] = useState(false); 
   const [showHistory, setShowHistory] = useState(false); 
-  const [showMenuManager, setShowMenuManager] = useState(false); 
+  // const [showMenuManager, setShowMenuManager] = useState(false); // Rimosso
 
   const todayDate = new Date();
   const todayStr = formatDate(todayDate);
@@ -1115,6 +1123,26 @@ const App = () => {
       await setDoc(orderRef, { status: 'open', confirmedBy: '' }, { merge: true });
     } catch (e) { console.error("Errore sblocco", e); }
   };
+  
+  // LOGICA TEMPORANEA DI RESET DEL DATABASE
+  const resetDatabaseState = async () => {
+      if (!window.confirm("ATTENZIONE! Vuoi davvero resettare i documenti di configurazione (Settings, Holidays, AdminUID)?")) return;
+      if (!db || !BASE_CONFIG_COLLECTION || !SETTINGS_DOC_REF || !HOLIDAYS_DOC_REF || !ADMIN_UID_DOC_REF || !DAILY_MENU_DOC_REF) {
+          window.alert("Errore: Riferimenti al database non validi.");
+          return;
+      }
+      
+      try {
+          await deleteDoc(SETTINGS_DOC_REF);
+          await deleteDoc(HOLIDAYS_DOC_REF);
+          await deleteDoc(ADMIN_UID_DOC_REF);
+          await deleteDoc(DAILY_MENU_DOC_REF);
+          window.alert("Reset completato. Aggiorna il browser e rifai il login (Admin) per salvare il nuovo UID.");
+      } catch (e) {
+          console.error("Errore nel reset:", e);
+          window.alert("Errore nel reset: Controlla i permessi di DELETE sul DB.");
+      }
+  };
 
   const openLateEmail = () => {
     const subject = encodeURIComponent(`Ordine Tardivo/Personale - ${todayDate.toLocaleDateString('it-IT')}`);
@@ -1170,7 +1198,7 @@ const App = () => {
 
         {/* MODALI */}
         {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
-        {showAdminPanel && <AdminPanel db={db} currentDay={todayStr} onClose={() => setShowAdminPanel(false)} colleaguesList={COLLEAGUES_LIST} onToggleForceOpen={setAdminOverride} isForceOpen={adminOverride} />}
+        {showAdminPanel && <AdminPanel db={db} currentDay={todayStr} onClose={() => setShowAdminPanel(false)} colleaguesList={COLLEAGUES_LIST} onToggleForceOpen={setAdminOverride} isForceOpen={adminOverride} resetDatabaseState={resetDatabaseState} />}
         {showHistory && <AdminHistory db={db} onClose={() => setShowHistory(false)} user={user} />}
         {/* PublicMenuManager RIMOSSO */}
 
