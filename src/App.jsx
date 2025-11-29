@@ -542,7 +542,7 @@ const App = () => {
     useEffect(() => { const timer = setInterval(() => setTime(new Date()), 1000); return () => clearInterval(timer); }, []);
     const hour = time.getHours();
     const minute = time.getMinutes();
-    const isLateWarning = !adminOverride && ((hour === 10 && minute >= 30) || (hour === 11) || (hour === 12 && minute < 30)); // 10:30 - 12:59
+    const isLateWarning = !adminOverride && isTodayAllowed && ((hour === 10 && minute >= 30) || (hour === 11) || (hour === 12 && minute < 30)); // 10:30 - 12:59
     const isBookingClosed = !adminOverride && ((hour === 12 && minute >= 0) || (hour > 12)); // 12:00+
     const isEmailClosed = !adminOverride && (hour >= 13); // 13:00+
     const isTodayAllowed = activeDates.includes(todayStr) || adminOverride;
