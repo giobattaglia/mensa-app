@@ -23,7 +23,6 @@ const PUBLIC_ORDERS_COLLECTION = `${PUBLIC_DATA_PATH}/mealOrders`;
 const CONFIG_DOC_PATH = `${PUBLIC_DATA_PATH}/config`;
 const SETTINGS_DOC_PATH = `${PUBLIC_DATA_PATH}/settings`;
 const HOLIDAYS_DOC_PATH = `${CONFIG_DOC_PATH}/holidays`; // Percorso corretto
-const SENT_DAYS_DOC_PATH = `${CONFIG_DOC_PATH}/sentDays`; // Nuovo percorso per tenere traccia dei giorni inviati
 
 
 const BANNER_IMAGE_URL = "https://images.unsplash.com/photo-1559339352-11d035aa65de?q=80&w=2074&auto=format&fit=crop";
@@ -116,8 +115,8 @@ const HelpModal = ({ onClose }) => (
                 <div className="bg-red-50 p-4 rounded-lg border border-red-200">
                     <h3 className="font-bold text-red-800 border-b border-red-300 pb-1 mb-2">2. Scadenze</h3>
                     <ul className="list-disc pl-5 space-y-2 text-sm text-red-700">
-                        <li>**10:30:** Appare l'avviso "È Tardi" (tutti possono inviare).</li>
-                        <li>**12:00:** STOP ORDINI. Il sistema si blocca per tutti.</li>
+                        <li>**10:30:** Scadenza per salvare l'ordine e per inviare la mail di gruppo.</li>
+                        <li>**12:00:** STOP ORDINI. Il sistema si blocca.</li>
                         <li>**13:00:** STOP EMAIL. L'unico tasto disponibile è "CHIAMA IL BAR".</li>
                     </ul>
                 </div>
@@ -329,7 +328,7 @@ const AdminHistory = ({ db, onClose, user }) => {
                     <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="border p-1 rounded" />
                 </div>
 
-                <div className-="flex-1 overflow-y-auto border rounded-lg p-4 bg-gray-50">
+                <div className="flex-1 overflow-y-auto border rounded-lg p-4 bg-gray-50">
                     {loadingHistory ? <p>Caricamento...</p> : (
                         historyOrders.length === 0 ? <p className="text-gray-500 italic text-center">Nessun ordine ufficiale inviato in questa data.</p> : (
                             <div className="space-y-2">
@@ -412,11 +411,16 @@ const AdminPanel = ({ db, onClose, colleaguesList, adminOverride, onToggleForceO
 
     useEffect(() => {
         if (!db) return;
+
+        // Load Holiday Dates
         getDoc(doc(db, HOLIDAYS_DOC_PATH)).then(snap => {
             if (snap.exists() && snap.data().activeDates) setActiveDates(snap.data().activeDates);
             else setDoc(doc(db, HOLIDAYS_DOC_PATH), { activeDates: generateAllowedDates() }, { merge: true }).catch(console.error);
         }).catch(console.error).finally(() => setLoadingDates(false));
+
+        // Load Settings
         getDoc(doc(db, SETTINGS_DOC_PATH, 'main')).then(snap => { if (snap.exists()) setSettings(snap.data()); }).catch(console.error);
+
     }, [db]);
 
     const handleToggleDate = async (dStr) => {
@@ -538,9 +542,9 @@ const App = () => {
     useEffect(() => { const timer = setInterval(() => setTime(new Date()), 1000); return () => clearInterval(timer); }, []);
     const hour = time.getHours();
     const minute = time.getMinutes();
-    const isLateWarning = !adminOverride && ((hour === 10 && minute >= 30) || (hour === 11));
-    const isBookingClosed = !adminOverride && (hour >= 12);
-    const isEmailClosed = !adminOverride && (hour >= 13);
+    const isLateWarning = !adminOverride && ((hour === 10 && minute >= 30) && (hour < 13)); // 10:30 - 12:59
+    const isBookingClosed = !adminOverride && ((hour === 10 && minute >= 30) || (hour > 10 && hour < 12)); // 10:30 - 11:59
+    const isEmailClosed = !adminOverride && (hour >= 13); // 13:00+
     const isTodayAllowed = activeDates.includes(todayStr) || adminOverride;
 
     const forceStart = () => { setLoading(false); setDataLoaded(true); setIsAuthReady(true); console.warn("Avvio forzato."); };
@@ -599,7 +603,7 @@ const App = () => {
     const placeOrder = async () => {
         if (orderStatus === 'sent' && !user.isAdmin) { alert("Ordine già inviato al bar! Non puoi modificare."); return; }
         if (!isTodayAllowed && !user.isAdmin) { alert("Oggi il servizio è chiuso e non puoi ordinare."); return; }
-        if (isBookingClosed && !user.isAdmin) { alert("Troppo tardi! Sono passate le 12:00. Solo l'admin può modificare."); return; }
+        if (isBookingClosed && !user.isAdmin) { alert("Troppo tardi! Sono passate le 10:30. Solo l'admin può modificare."); return; }
         const newErrors = {}; let hasError = false;
         if (!dishName || dishName.trim() === '') { newErrors.dishName = true; hasError = true; }
         if (!selectedWater) { newErrors.water = true; hasError = true; }
@@ -655,7 +659,7 @@ const App = () => {
     // SORTING & FILTERING
     const sortedOrders = [...orders].sort((a, b) => a.userName.localeCompare(b.userName));
     const barOrders = sortedOrders.filter(o => !o.isTakeout);
-    const takeoutOrders = sortedOrders.filter(o => o.isTakeout);
+    const takeoutOrders = sortedOrders.filter(o => !o.isTakeout);
     const isClosedView = (!isTodayAllowed && !adminOverride);
 
     return (
@@ -669,7 +673,7 @@ const App = () => {
                 </div>
 
                 {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
-                {showAdminPanel && <AdminPanel db={db} currentDay={todayStr} onClose={() => setShowAdminPanel(false)} colleaguesList={COLLEAGUES_LIST} adminOverride={adminOverride} onToggleForceOpen={setAdminOverride} todayStr={todayStr} adminName={user.name} />}
+                {showAdminPanel && <AdminPanel db={db} onClose={() => setShowAdminPanel(false)} colleaguesList={COLLEAGUES_LIST} adminOverride={adminOverride} onToggleForceOpen={setAdminOverride} todayStr={todayStr} adminName={user.name} />}
                 {showHistory && <AdminHistory db={db} onClose={() => setShowHistory(false)} user={user} />}
 
                 <header className="relative text-white overflow-hidden border-b-4 border-green-800 bg-cover bg-center" style={{ backgroundColor: '#15803d', backgroundImage: BANNER_IMAGE_URL ? `url(${BANNER_IMAGE_URL})` : 'none' }}>
@@ -708,7 +712,7 @@ const App = () => {
                 {isEmailClosed && !isClosedView && (
                     <div className="bg-gray-900 border-b-4 border-red-600 p-6 text-center sticky top-0 z-50 shadow-2xl">
                         <h2 className="text-white font-bold text-2xl uppercase mb-2">🛑 ORDINE WEB CHIUSO</h2>
-                        <p className="text-gray-300 mb-4 text-sm">Sono passate le 12:00. Non inviare più email, il bar non la leggerebbe.</p>
+                        <p className="text-gray-300 mb-4 text-sm">Sono passate le 13:00. Non inviare più email, il bar non la leggerebbe.</p>
                         <a href={`tel:${appSettings.phoneBar}`} className="inline-block bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-8 rounded-full shadow-lg text-lg animate-bounce">📞 CHIAMA IL BAR: {appSettings.phoneBar}</a>
                         {user.isAdmin && ( <div className="mt-4 border-t border-gray-700 pt-4"><p className="text-xs text-gray-400 mb-2">Area Admin: Puoi forzare l'invio se necessario.</p><div className="flex justify-center gap-2"><button onClick={openGmail} className="bg-gray-700 hover:bg-gray-600 text-white text-xs py-2 px-4 rounded border border-gray-500">Forza Gmail</button><button onClick={openDefaultMail} className="bg-gray-700 hover:bg-gray-600 text-white text-xs py-2 px-4 rounded border border-gray-500">Forza App Mail</button><button onClick={markAsSent} className="bg-green-700 hover:bg-green-600 text-white text-xs py-2 px-4 rounded border border-green-500">Forza "Inviato"</button></div></div>)}
                     </div>
