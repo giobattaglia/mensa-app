@@ -603,7 +603,7 @@ const App = () => {
     const placeOrder = async () => {
         if (orderStatus === 'sent' && !user.isAdmin) { alert("Ordine già inviato al bar! Non puoi modificare."); return; }
         if (!isTodayAllowed && !user.isAdmin) { alert("Oggi il servizio è chiuso e non puoi ordinare."); return; }
-        if (isBookingClosed && !user.isAdmin) { alert("Troppo tardi! Sono passate le 10:30. Solo l'admin può modificare."); return; }
+        if (isBookingClosed && !user.isAdmin) { alert("Troppo tardi! Sono passate le 12:00. Solo l'admin può modificare."); return; }
         const newErrors = {}; let hasError = false;
         if (!dishName || dishName.trim() === '') { newErrors.dishName = true; hasError = true; }
         if (!selectedWater) { newErrors.water = true; hasError = true; }
@@ -659,7 +659,7 @@ const App = () => {
     // SORTING & FILTERING
     const sortedOrders = [...orders].sort((a, b) => a.userName.localeCompare(b.userName));
     const barOrders = sortedOrders.filter(o => !o.isTakeout);
-    const takeoutOrders = sortedOrders.filter(o => !o.isTakeout);
+    const takeoutOrders = sortedOrders.filter(o => o.isTakeout); // FIX: Era !o.isTakeout, ora è corretto
     const isClosedView = (!isTodayAllowed && !adminOverride);
 
     return (
